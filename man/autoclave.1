@@ -1,0 +1,249 @@
+.\" generated with Ronn/v0.7.3
+.\" http://github.com/rtomayko/ronn/tree/0.7.3
+.
+.TH "AUTOCLAVE" "1" "January 2015" "" ""
+.
+.SH "SYNOPSIS"
+autoclave [\-h] [\-c COUNT] [\-l] [\-e] [\-f MAX_FAILURES] [\-o OUT_PATH] [\-r MAX_RUNS] [\-t TIMEOUT] [\-v] [\-w WAIT] [\-x CMD] \fIcommand line\fR
+.
+.SH "DESCRIPTION"
+autoclave repeatedly executes a command line until its process exits with a non\-zero status, is stopped/terminated by a signal, a user\-specified timeout (\-t) runs out, or a user\-specified number of runs (\-r) have passed without any failures\.
+.
+.P
+It can log the contents of stdout (\-l) and/or stderr (\-e), and can rotate the log files so a fixed number of logs are kept (\-c)\.
+.
+.P
+On failure, a handler program (\-x) can be called with informaiton about the child process\. That way, a debugger can be opened if the stressed program times out or dumps core\.
+.
+.SH "OPTIONS"
+.
+.TP
+\fB\-h\fR
+Print a usage summary and exit\.
+.
+.TP
+\fB\-c COUNT\fR
+If logging is used, only keep logs for the COUNT most recent runs\. (If both stdout and stderr are logged, there will be 2 * COUNT logs\.) By default, log rotation is off\.
+.
+.TP
+\fB\-l\fR
+Log stdout\. Defaults to false\. Log output paths default to \fBPROG_PATH/PROG_NAME\.RUN_ID\.stdout\.log\fR\.
+.
+.TP
+\fB\-e\fR
+Log stderr\. Defaults to false\.
+.
+.TP
+\fB\-o\fR
+Set the output path and base name for logs\. Defaults to the first part of the command line given to autoclave\.
+.
+.TP
+\fB\-r MAX_RUNS\fR:
+.
+.IP
+If MAX_RUNS executions of the command line complete without any failures, then terminate autoclave with a return value of \fBEXIT_SUCCESS\fR\.
+.
+.TP
+\fB\-t TIMEOUT\fR
+If any individual execution of the command line takes longer than TIMEOUT seconds to complete (perhaps due to a deadlock), consider it a failure\. If an error handler is provided, call it, otherwise kill(2) the child process ID\.
+.
+.TP
+\fB\-v\fR
+Increase verbosity\.
+.
+.TP
+\fB\-w SECONDS\fR
+Wait SECONDS between executing the command line each time\. Defaults to 1\.
+.
+.TP
+\fB\-x CMD\fR
+If a failure occurs, call CMD\. See ENVIRONMENT\.
+.
+.SH "ENVIRONMENT"
+The failure handler will be called with the following environment variables defined:
+.
+.TP
+\fBAUTOCLAVE_CHILD_PID\fR
+The process ID of the child process\.
+.
+.TP
+\fBAUTOCLAVE_RUN_ID\fR
+The number of the current run (1st, 3rd, etc\.)\.
+.
+.TP
+\fBAUTOCLAVE_FAIL_TYPE\fR
+The general failure cause: "timeout", "exit", "term", "stop"\.
+.
+.TP
+\fBAUTOCLAVE_DUMPED_CORE\fR
+Whether the child process dumped core\. "1" or "0"\.
+.
+.TP
+\fBAUTOCLAVE_EXIT_STATUS\fR
+The exit status of the child process, if it exited\.
+.
+.TP
+\fBAUTOCLAVE_TERM_SIGNAL\fR
+The signal that terminated the child process, if any\.
+.
+.TP
+\fBAUTOCLAVE_STOP_SIGNAL\fR
+The signal that caused the child process to stop, if any\.
+.
+.SH "EXIT STATUS"
+Returns 0 if the maximum number of runs (\-r) executed without any failures, or 1 otherwise\.
+.
+.SH "EXAMPLES"
+Repeatedly run buggy_program until it crashes:
+.
+.IP "" 4
+.
+.nf
+
+$ autoclave buggy_program
+.
+.fi
+.
+.IP "" 0
+.
+.P
+Same, but print run and failure counts:
+.
+.IP "" 4
+.
+.nf
+
+$ autoclave \-v buggy_program
+.
+.fi
+.
+.IP "" 0
+.
+.P
+Same, but if it succeeds 10 times, return EXIT_SUCCESS:
+.
+.IP "" 4
+.
+.nf
+
+$ autoclave \-v \-r 10 buggy_program
+.
+.fi
+.
+.IP "" 0
+.
+.P
+Repeatedly run buggy_program, logging stdout to \fBbuggy_program\.1\.stdout\.log\fR, \fBbuggy_program\.2\.stdout\.log\fR, and so on:
+.
+.IP "" 4
+.
+.nf
+
+$ autoclave \-l buggy_program
+.
+.fi
+.
+.IP "" 0
+.
+.P
+Same, but log to \fB/tmp/buggy\.ID\.stdout\.log\fR instead:
+.
+.IP "" 4
+.
+.nf
+
+$ autoclave \-l \-o /tmp/buggy buggy_program
+.
+.fi
+.
+.IP "" 0
+.
+.P
+Log, but only keep the 5 most recend log files:
+.
+.IP "" 4
+.
+.nf
+
+$ autoclave \-l \-c 5 buggy_program
+.
+.fi
+.
+.IP "" 0
+.
+.P
+Same, but log stderr as well as stdout (keeping 10 files):
+.
+.IP "" 4
+.
+.nf
+
+$ autoclave \-l \-e \-c 5 buggy_program
+.
+.fi
+.
+.IP "" 0
+.
+.P
+Repeatedly run buggy_program until it has failed 10 times:
+.
+.IP "" 4
+.
+.nf
+
+$ autoclave \-f 10 buggy_program
+.
+.fi
+.
+.IP "" 0
+.
+.P
+Run a program that occasionally deadlocks, halting it and counting it as a failure if it takes more than 10 seconds to complete:
+.
+.IP "" 4
+.
+.nf
+
+$ autoclave \-t 10  examples/deadlock_example
+.
+.fi
+.
+.IP "" 0
+.
+.P
+Same, but run the script \fBexamples/gdb_it\fR when it times out, so gdb can attach to the stopped process and investigate what is deadlocking\. (Note: the process is not halted after the \-x command returns\.)
+.
+.IP "" 4
+.
+.nf
+
+$ autoclave \-t 10 \-x examples/gdb_it examples/deadlock_example
+.
+.fi
+.
+.IP "" 0
+.
+.P
+Run \fBexamples/crash_example\fR, calling \fBexamples/gdb_it\fR if it fails:
+.
+.IP "" 4
+.
+.nf
+
+$ autoclave \-x examples/gdb_it examples/crash_example
+.
+.fi
+.
+.IP "" 0
+.
+.SH "BUGS"
+All monitoring is based on the child process directly created by forking and execve\-ing the command, so if the command is just a wrapper script for another program, the results will be incomplete\.
+.
+.P
+There may be race conditions in the child process error handling logic\.
+.
+.SH "COPYRIGHT"
+\fBautoclave\fR is Copyright (C) 2015 Scott Vokes \fIvokes\.s@gmail\.com\fR\.
+.
+.SH "SEE ALSO"
+gdb(1), core(5)

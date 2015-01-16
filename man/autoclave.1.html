@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv='content-type' value='text/html;charset=utf8'>
+  <meta name='generator' value='Ronn/v0.7.3 (http://github.com/rtomayko/ronn/tree/0.7.3)'>
+  <title>autoclave(1) - autoclave: repeatedly run programs until they break</title>
+  <style type='text/css' media='all'>
+  /* style: man */
+  body#manpage {margin:0}
+  .mp {max-width:100ex;padding:0 9ex 1ex 4ex}
+  .mp p,.mp pre,.mp ul,.mp ol,.mp dl {margin:0 0 20px 0}
+  .mp h2 {margin:10px 0 0 0}
+  .mp > p,.mp > pre,.mp > ul,.mp > ol,.mp > dl {margin-left:8ex}
+  .mp h3 {margin:0 0 0 4ex}
+  .mp dt {margin:0;clear:left}
+  .mp dt.flush {float:left;width:8ex}
+  .mp dd {margin:0 0 0 9ex}
+  .mp h1,.mp h2,.mp h3,.mp h4 {clear:left}
+  .mp pre {margin-bottom:20px}
+  .mp pre+h2,.mp pre+h3 {margin-top:22px}
+  .mp h2+pre,.mp h3+pre {margin-top:5px}
+  .mp img {display:block;margin:auto}
+  .mp h1.man-title {display:none}
+  .mp,.mp code,.mp pre,.mp tt,.mp kbd,.mp samp,.mp h3,.mp h4 {font-family:monospace;font-size:14px;line-height:1.42857142857143}
+  .mp h2 {font-size:16px;line-height:1.25}
+  .mp h1 {font-size:20px;line-height:2}
+  .mp {text-align:justify;background:#fff}
+  .mp,.mp code,.mp pre,.mp pre code,.mp tt,.mp kbd,.mp samp {color:#131211}
+  .mp h1,.mp h2,.mp h3,.mp h4 {color:#030201}
+  .mp u {text-decoration:underline}
+  .mp code,.mp strong,.mp b {font-weight:bold;color:#131211}
+  .mp em,.mp var {font-style:italic;color:#232221;text-decoration:none}
+  .mp a,.mp a:link,.mp a:hover,.mp a code,.mp a pre,.mp a tt,.mp a kbd,.mp a samp {color:#0000ff}
+  .mp b.man-ref {font-weight:normal;color:#434241}
+  .mp pre {padding:0 4ex}
+  .mp pre code {font-weight:normal;color:#434241}
+  .mp h2+pre,h3+pre {padding-left:0}
+  ol.man-decor,ol.man-decor li {margin:3px 0 10px 0;padding:0;float:left;width:33%;list-style-type:none;text-transform:uppercase;color:#999;letter-spacing:1px}
+  ol.man-decor {width:100%}
+  ol.man-decor li.tl {text-align:left}
+  ol.man-decor li.tc {text-align:center;letter-spacing:4px}
+  ol.man-decor li.tr {text-align:right;float:right}
+  </style>
+</head>
+<!--
+  The following styles are deprecated and will be removed at some point:
+  div#man, div#man ol.man, div#man ol.head, div#man ol.man.
+
+  The .man-page, .man-decor, .man-head, .man-foot, .man-title, and
+  .man-navigation should be used instead.
+-->
+<body id='manpage'>
+  <div class='mp' id='man'>
+
+  <div class='man-navigation' style='display:none'>
+    <a href="#SYNOPSIS">SYNOPSIS</a>
+    <a href="#DESCRIPTION">DESCRIPTION</a>
+    <a href="#OPTIONS">OPTIONS</a>
+    <a href="#ENVIRONMENT">ENVIRONMENT</a>
+    <a href="#EXIT-STATUS">EXIT STATUS</a>
+    <a href="#EXAMPLES">EXAMPLES</a>
+    <a href="#BUGS">BUGS</a>
+    <a href="#COPYRIGHT">COPYRIGHT</a>
+    <a href="#SEE-ALSO">SEE ALSO</a>
+  </div>
+
+  <ol class='man-decor man-head man head'>
+    <li class='tl'>autoclave(1)</li>
+    <li class='tc'></li>
+    <li class='tr'>autoclave(1)</li>
+  </ol>
+
+  <h1>autoclave: repeatedly run programs until they break</h1>
+<h2 id="SYNOPSIS">SYNOPSIS</h2>
+
+<p>autoclave [-h] [-c COUNT] [-l] [-e] [-f MAX_FAILURES] [-o OUT_PATH]
+    [-r MAX_RUNS] [-t TIMEOUT] [-v] [-w WAIT] [-x CMD] <var>command line</var></p>
+
+<h2 id="DESCRIPTION">DESCRIPTION</h2>
+
+<p>autoclave repeatedly executes a command line until its process exits
+with a non-zero status, is stopped/terminated by a signal, a
+user-specified timeout (-t) runs out, or a user-specified number of runs
+(-r) have passed without any failures.</p>
+
+<p>It can log the contents of stdout (-l) and/or stderr (-e), and can
+rotate the log files so a fixed number of logs are kept (-c).</p>
+
+<p>On failure, a handler program (-x) can be called with informaiton about
+the child process. That way, a debugger can be opened if the stressed
+program times out or dumps core.</p>
+
+<h2 id="OPTIONS">OPTIONS</h2>
+
+<dl>
+<dt class="flush"><code>-h</code></dt><dd><p>Print a usage summary and exit.</p></dd>
+<dt><code>-c COUNT</code></dt><dd><p>If logging is used, only keep logs for the COUNT most recent runs.
+(If both stdout and stderr are logged, there will be 2 * COUNT
+logs.) By default, log rotation is off.</p></dd>
+<dt class="flush"><code>-l</code></dt><dd><p>Log stdout. Defaults to false. Log output paths default to
+<code>PROG_PATH/PROG_NAME.RUN_ID.stdout.log</code>.</p></dd>
+<dt class="flush"><code>-e</code></dt><dd><p>Log stderr. Defaults to false.</p></dd>
+<dt class="flush"><code>-o</code></dt><dd><p>Set the output path and base name for logs. Defaults to the first
+part of the command line given to autoclave.</p></dd>
+<dt><code>-r MAX_RUNS</code>:</dt><dd><p></p>
+
+<p>If MAX_RUNS executions of the command line complete without any failures,
+then terminate autoclave with a return value of <code>EXIT_SUCCESS</code>.</p></dd>
+<dt><code>-t TIMEOUT</code></dt><dd><p>If any individual execution of the command line takes longer than
+TIMEOUT seconds to complete (perhaps due to a deadlock), consider it
+a failure. If an error handler is provided, call it, otherwise
+<span class="man-ref">kill<span class="s">(2)</span></span> the child process ID.</p></dd>
+<dt class="flush"><code>-v</code></dt><dd><p>Increase verbosity.</p></dd>
+<dt><code>-w SECONDS</code></dt><dd><p>Wait SECONDS between executing the command line each time. Defaults
+to 1.</p></dd>
+<dt class="flush"><code>-x CMD</code></dt><dd><p>If a failure occurs, call CMD. See ENVIRONMENT.</p></dd>
+</dl>
+
+
+<h2 id="ENVIRONMENT">ENVIRONMENT</h2>
+
+<p>The failure handler will be called with the following environment
+variables defined:</p>
+
+<dl>
+<dt><code>AUTOCLAVE_CHILD_PID</code></dt><dd><p>The process ID of the child process.</p></dd>
+<dt><code>AUTOCLAVE_RUN_ID</code></dt><dd><p>The number of the current run (1st, 3rd, etc.).</p></dd>
+<dt><code>AUTOCLAVE_FAIL_TYPE</code></dt><dd><p>The general failure cause: "timeout", "exit", "term", "stop".</p></dd>
+<dt><code>AUTOCLAVE_DUMPED_CORE</code></dt><dd><p>Whether the child process dumped core. "1" or "0".</p></dd>
+<dt><code>AUTOCLAVE_EXIT_STATUS</code></dt><dd><p>The exit status of the child process, if it exited.</p></dd>
+<dt><code>AUTOCLAVE_TERM_SIGNAL</code></dt><dd><p>The signal that terminated the child process, if any.</p></dd>
+<dt><code>AUTOCLAVE_STOP_SIGNAL</code></dt><dd><p>The signal that caused the child process to stop, if any.</p></dd>
+</dl>
+
+
+<h2 id="EXIT-STATUS">EXIT STATUS</h2>
+
+<p>Returns 0 if the maximum number of runs (-r) executed without any
+failures, or 1 otherwise.</p>
+
+<h2 id="EXAMPLES">EXAMPLES</h2>
+
+<p>Repeatedly run buggy_program until it crashes:</p>
+
+<pre><code>$ autoclave buggy_program
+</code></pre>
+
+<p>Same, but print run and failure counts:</p>
+
+<pre><code>$ autoclave -v buggy_program
+</code></pre>
+
+<p>Same, but if it succeeds 10 times, return EXIT_SUCCESS:</p>
+
+<pre><code>$ autoclave -v -r 10 buggy_program
+</code></pre>
+
+<p>Repeatedly run buggy_program, logging stdout to
+<code>buggy_program.1.stdout.log</code>, <code>buggy_program.2.stdout.log</code>, and so on:</p>
+
+<pre><code>$ autoclave -l buggy_program
+</code></pre>
+
+<p>Same, but log to <code>/tmp/buggy.ID.stdout.log</code> instead:</p>
+
+<pre><code>$ autoclave -l -o /tmp/buggy buggy_program
+</code></pre>
+
+<p>Log, but only keep the 5 most recend log files:</p>
+
+<pre><code>$ autoclave -l -c 5 buggy_program
+</code></pre>
+
+<p>Same, but log stderr as well as stdout (keeping 10 files):</p>
+
+<pre><code>$ autoclave -l -e -c 5 buggy_program
+</code></pre>
+
+<p>Repeatedly run buggy_program until it has failed 10 times:</p>
+
+<pre><code>$ autoclave -f 10 buggy_program
+</code></pre>
+
+<p>Run a program that occasionally deadlocks, halting it and counting it as a
+failure if it takes more than 10 seconds to complete:</p>
+
+<pre><code>$ autoclave -t 10  examples/deadlock_example
+</code></pre>
+
+<p>Same, but run the script <code>examples/gdb_it</code> when it times out, so gdb can
+attach to the stopped process and investigate what is deadlocking.
+(Note: the process is not halted after the -x command returns.)</p>
+
+<pre><code>$ autoclave -t 10 -x examples/gdb_it examples/deadlock_example
+</code></pre>
+
+<p>Run <code>examples/crash_example</code>, calling <code>examples/gdb_it</code> if it fails:</p>
+
+<pre><code>$ autoclave -x examples/gdb_it examples/crash_example
+</code></pre>
+
+<h2 id="BUGS">BUGS</h2>
+
+<p>All monitoring is based on the child process directly created by forking
+and execve-ing the command, so if the command is just a wrapper script
+for another program, the results will be incomplete.</p>
+
+<p>There may be race conditions in the child process error handling logic.</p>
+
+<h2 id="COPYRIGHT">COPYRIGHT</h2>
+
+<p><code>autoclave</code> is Copyright (C) 2015 Scott Vokes <a href="&#x6d;&#x61;&#105;&#108;&#x74;&#x6f;&#58;&#x76;&#111;&#x6b;&#101;&#115;&#46;&#115;&#64;&#x67;&#109;&#x61;&#105;&#x6c;&#x2e;&#x63;&#111;&#x6d;" data-bare-link="true">&#118;&#x6f;&#x6b;&#x65;&#x73;&#x2e;&#x73;&#64;&#103;&#x6d;&#97;&#x69;&#108;&#46;&#99;&#111;&#109;</a>.</p>
+
+<h2 id="SEE-ALSO">SEE ALSO</h2>
+
+<p><span class="man-ref">gdb<span class="s">(1)</span></span>, <span class="man-ref">core<span class="s">(5)</span></span></p>
+
+
+  <ol class='man-decor man-foot man foot'>
+    <li class='tl'></li>
+    <li class='tc'>January 2015</li>
+    <li class='tr'>autoclave(1)</li>
+  </ol>
+
+  </div>
+</body>
+</html>

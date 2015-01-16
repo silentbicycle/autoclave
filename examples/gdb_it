@@ -1,0 +1,30 @@
+#!/bin/sh
+
+# If a process timed out, attempt to attach to it with gdb.
+# If it dumped core, open the core file in gdb.
+
+# Print all status variables defined by autoclave:
+echo -- pid: ${AUTOCLAVE_CHILD_PID}
+echo -- run_id: ${AUTOCLAVE_RUN_ID}
+echo -- failure type: ${AUTOCLAVE_FAIL_TYPE}
+echo -- dumped core ? ${AUTOCLAVE_DUMPED_CORE}
+echo -- exit status: ${AUTOCLAVE_EXIT_STATUS}
+echo -- term signal: ${AUTOCLAVE_TERM_SIGNAL}
+echo -- stop signal: ${AUTOCLAVE_STOP_SIGNAL}
+
+if [ "timeout" = ${AUTOCLAVE_FAIL_TYPE} ]; then
+    gdb --pid=${AUTOCLAVE_CHILD_PID} ${AUTOCLAVE_CMD}
+elif [ "1" = ${AUTOCLAVE_DUMPED_CORE} ]; then
+    if [ "Linux" = $(uname) ]; then
+        # default Linux-style: "core"
+        gdb --core=core ${AUTOCLAVE_CMD}
+    elif [ "OpenBSD" = $(uname) ]; then
+        # OpenBSD-style: "CMD.core"
+        gdb --core=${AUTOCLAVE_CMD}.core ${AUTOCLAVE_CMD}
+    elif [ "Darwin" = $(uname) ]; then
+        # OSX-style: "/cores/core.PID"
+        gdb --core=/cores/core.${AUTOCLAVE_CHILD_PID} ${AUTOCLAVE_CMD}
+    else
+        echo Edit script to specify how core dumps are named on this OS
+    fi
+fi
