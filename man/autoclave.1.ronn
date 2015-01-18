@@ -121,7 +121,7 @@ Same, but log to `/tmp/buggy.ID.stdout.log` instead:
 
     $ autoclave -l -o /tmp/buggy buggy_program
 
-Log, but only keep the 5 most recend log files:
+Log, but only keep the 5 most recent log files:
 
     $ autoclave -l -c 5 buggy_program
 
