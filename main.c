@@ -182,8 +182,8 @@ static bool try_exec(config *cfg, size_t id, child_status *status) {
         }
         
         /* TODO: could write id into argument if ARGV[n] is "%" */
-        int res = execv(cfg->argv[0], &cfg->argv[1]);
-        if (res == -1) { err(1, "execv"); }
+        int res = execvp(cfg->argv[0], &cfg->argv[0]);
+        if (res == -1) { err(1, "execvp"); }
     } else {                    /* parent */
         status->pid = kid;
         status->run_id = id;
