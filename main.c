@@ -33,7 +33,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-/* Version 0.1.0. */
+/* Version 0.1.0 +[execvp, argv offset]. */
 #define AUTOCLAVE_VERSION_MAJOR 0
 #define AUTOCLAVE_VERSION_MINOR 1
 #define AUTOCLAVE_VERSION_PATCH 0
