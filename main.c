@@ -354,19 +354,21 @@ static void setenv_and_call_handler(config *cfg, child_status *status) {
 static int mainloop(config *cfg) {
     size_t failures = 0;
 
-    for (size_t run_id = 1; run_id <= cfg->max_runs; run_id++) {
+    size_t run_id = 0;
+    while (run_id < cfg->max_runs) {
         struct timeval tv;
         if (0 != gettimeofday(&tv, NULL)) { err(1, "gettimeofday"); }
-        if (cfg->verbosity > 0 && run_id > 0) {
+        child_status s;
+        bool failed = try_exec(cfg, run_id, &s);
+        if (failed) { failures++; }
+        if (failures >= cfg->max_failures) { break; }
+        run_id++;
+        if (cfg->verbosity > 0) {
             printf("%08lld.%08lld -- %zd run%s, %zd failure%s\n",
                 (long long)tv.tv_sec, (long long)tv.tv_usec,
                 run_id, run_id == 1 ? "" : "s",
                 failures, failures == 1 ? "" : "s");
         }
-        child_status s;
-        bool failed = try_exec(cfg, run_id, &s);
-        if (failed) { failures++; }
-        if (failures >= cfg->max_failures) { break; }
         if (cfg->wait > 0) {
             poll(NULL, 0, (int)(1000.0 * cfg->wait));
         }
