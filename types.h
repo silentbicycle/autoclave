@@ -25,7 +25,7 @@ typedef struct {
     bool log_stderr;
     char *out_path;
     rotation rot;
-    int wait;
+    double wait;
     int timeout;
     int verbosity;
     char *error_handler;
@@ -48,9 +48,15 @@ typedef struct {
 } child_status;
 
 static void handle_args(config *cfg, int argc, char **argv);
+static void sigchild_handler(int sig);
+static int log_path(char *buf, size_t buf_size,
+    config *cfg, size_t id, char *fdname);
 static bool try_exec(config *cfg, size_t id, child_status *status);
-static int mainloop(config *cfg);
+static int supervise_process(config *cfg, child_status *status,
+    bool *timed_out);
 static void setenv_and_call_handler(config *cfg, child_status *status);
+static int mainloop(config *cfg);
+static void init_sigchild_alert(void);
 //static void process_log(config *cfg, char *path);
 
 #endif

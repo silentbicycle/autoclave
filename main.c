@@ -33,7 +33,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-/* Version 0.1.0 +[execvp, argv offset]. */
+/* Version 0.1.0 +[execvp, argv offset, wait_double, alert_pipe]. */
 #define AUTOCLAVE_VERSION_MAJOR 0
 #define AUTOCLAVE_VERSION_MINOR 1
 #define AUTOCLAVE_VERSION_PATCH 0
@@ -112,7 +112,7 @@ static void handle_args(config *cfg, int argc, char **argv) {
             cfg->verbosity++;
             break;
         case 'w':               /* wait */
-            cfg->wait = atoi(optarg);
+            cfg->wait = strtod(optarg, NULL);
             break;
         case 'x':               /* execute error handler */
             cfg->error_handler = optarg;
@@ -133,6 +133,31 @@ static void handle_args(config *cfg, int argc, char **argv) {
         cfg->out_path = cfg->argv[0];
     }
 }    
+
+/* Pipes used for handling SIGCHLD notifications. */
+static int alert_wr_pipe;
+static int alert_rd_pipe;
+
+/* Send a notification when the child process terminates.
+ * The content of the write isn't actually important,
+ * it's just used to interrupt the poll and wake the
+ * supervisor process up immediately .*/
+static void sigchild_handler(int sig) {
+    for (int retries = 0; retries < 100; retries++) {
+        /* POSIX.1-2004 requires calling write(2) in a
+         * signal handler to be safe. */
+        ssize_t res = write(alert_wr_pipe, "!", 1);
+        if (res == 1) { return; }
+        if (res == -1) {
+            if (errno == EINTR) {
+                errno = 0;
+            } else {
+                err(1, "write");
+            }
+        }
+    }
+    assert(false);
+}
 
 static int log_path(char *buf, size_t buf_size,
         config *cfg, size_t id, char *fdname) {
@@ -184,36 +209,17 @@ static bool try_exec(config *cfg, size_t id, child_status *status) {
         /* TODO: could write id into argument if ARGV[n] is "%" */
         int res = execvp(cfg->argv[0], &cfg->argv[0]);
         if (res == -1) { err(1, "execvp"); }
-    } else {                    /* parent */
+    } else {                   /* parent */
         status->pid = kid;
         status->run_id = id;
-        int stat_loc = 0;
-        size_t ticks = 0;
-        const int sleep_msec = 100;
-        const size_t max_ticks = (size_t)cfg->timeout * (1000 / sleep_msec);
-        while (ticks < max_ticks) {
-            pid_t res = waitpid(kid, &stat_loc, WNOHANG);
-            if (res == -1) {
-                if (errno == EINTR) {
-                    errno = 0;
-                } else {
-                    err(1, "wait");
-                }
-            } else if (res == 0) {
-                poll(NULL, 0, sleep_msec);
-                if (cfg->timeout != NO_TIMEOUT) { ticks++; }
-            } else {
-                assert(res == kid);
-                break;
-            }
-        }
-
+        bool timed_out = false;
+        int stat_loc = supervise_process(cfg, status, &timed_out);
         status->reason = REASON_UNDEF;
 #ifdef WCOREDUMP
         status->dumped_core = WCOREDUMP(stat_loc);
 #endif
 
-        if (ticks == max_ticks) {
+        if (timed_out) {
             status->reason = REASON_TIMEOUT;
             failed = true;
         } else if (WIFEXITED(stat_loc)) {
@@ -243,7 +249,9 @@ static bool try_exec(config *cfg, size_t id, child_status *status) {
             int res = kill(kid, SIGINT);
             if (res == -1) {
                 if (errno == ESRCH) {
-                    errno = 0;  /* race: child terminated on its own? */
+                    /* Race: child terminated on its own, as we
+                     * timed it out. Consider it a timeout. */
+                    errno = 0;
                 } else {
                     err(1, "kill");
                 }
@@ -258,6 +266,56 @@ static bool try_exec(config *cfg, size_t id, child_status *status) {
         if (-1 == close(errlog)) { err(1, "close"); }
     }
     return failed;
+}
+
+static int supervise_process(config *cfg, child_status *status,
+        bool *timed_out) {
+    int stat_loc = 0;
+    size_t ticks = 0;
+    const int sleep_msec = 100;
+    const size_t max_ticks = (size_t)cfg->timeout * (1000 / sleep_msec);
+    
+    struct pollfd fds[] = {
+        {
+            .fd = alert_rd_pipe,
+            .events = POLLIN,
+        },
+    };
+    
+    while (ticks < max_ticks) {
+        /* Poll for child process termination. */
+        pid_t res = waitpid(status->pid, &stat_loc, WNOHANG);
+        if (res == -1) {
+            if (errno == EINTR) {
+                errno = 0;
+            } else {
+                err(1, "wait");
+            }
+        } else if (res == 0) {
+            /* Sleep 100 msec, unless a SIGCHLD wakes it up. */
+            int res = poll(fds, 1, sleep_msec);
+            if (res == 1) {
+                char buf[8];
+                ssize_t rd = read(alert_rd_pipe, buf, sizeof(buf));
+                if (rd >= 0) {
+                    /* No-op -- the read is ignored. */
+                } else if (rd == -1) {
+                    if (errno == EINTR) {
+                        errno = 0;
+                    } else {
+                        err(1, "read");
+                    }
+                }
+            }
+            if (cfg->timeout != NO_TIMEOUT) { ticks++; }
+        } else {
+            assert(res == status->pid);
+            break;
+        }
+    }
+
+    if (ticks == max_ticks) { *timed_out = true; }
+    return stat_loc;
 }
 
 static void setenv_and_call_handler(config *cfg, child_status *status) {
@@ -309,16 +367,34 @@ static int mainloop(config *cfg) {
         bool failed = try_exec(cfg, run_id, &s);
         if (failed) { failures++; }
         if (failures >= cfg->max_failures) { break; }
-        if (cfg->wait > 0) { sleep(cfg->wait); }
+        if (cfg->wait > 0) {
+            poll(NULL, 0, (int)(1000.0 * cfg->wait));
+        }
     }
     return (failures > 0 ? 1 : 0);
 }
 
+static void init_sigchild_alert(void) {
+    int pipes[2];
+    if (0 != pipe(pipes)) { err(1, "pipe"); }
+    alert_rd_pipe = pipes[0];
+    alert_wr_pipe = pipes[1];
+
+    struct sigaction sa = {
+        .sa_handler = sigchild_handler,
+    };
+    if (sigaction(SIGCHLD, &sa, NULL) == -1) {
+        err(1, "sigaction");
+    }
+}
+
 int main(int argc, char **argv) {
+    init_sigchild_alert();
+
     config cfg = {
         .max_failures = 1,
         .max_runs = (size_t)-1,
-        .wait = 1,
+        .wait = 0.1,
         .timeout = NO_TIMEOUT,
     };
     handle_args(&cfg, argc, argv);
