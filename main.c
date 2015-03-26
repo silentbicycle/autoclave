@@ -54,8 +54,8 @@ static void usage(const char *msg) {
         AUTOCLAVE_VERSION_PATCH, AUTOCLAVE_AUTHOR);
     fprintf(stderr,
         "Usage: autoclave [-h] [-c COUNT] [-l] [-e] [-f MAX_FAILURES]\n"
-        "                 [-o OUT_PATH] [-r MAX_RUNS] [-t TIMEOUT]\n"
-        "                 [-v] [-w WAIT_MSEC] [-x CMD] program\n"
+        "                 [-o OUT_PATH] [-r MAX_RUNS] [-s] [-t TIMEOUT]\n"
+        "                 [-v] [-w WAIT_MSEC] [-x CMD] <command line>\n"
         "\n"
         "    -h:         help\n"
         "    -c COUNT:   rotate log files by count\n"
