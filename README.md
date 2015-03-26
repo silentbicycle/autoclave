@@ -1,5 +1,5 @@
-autoclave: repeatedly run programs until they break
-===================================================
+autoclave: a pressure cooker for programs
+=========================================
 
 ## Summary
 
