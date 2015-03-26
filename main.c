@@ -53,19 +53,19 @@ static void usage(const char *msg) {
         AUTOCLAVE_VERSION_MAJOR, AUTOCLAVE_VERSION_MINOR,
         AUTOCLAVE_VERSION_PATCH, AUTOCLAVE_AUTHOR);
     fprintf(stderr,
-        "Usage: autoclave [-h] [-c COUNT] [-e] [-l] [-f MAX_FAILURES]\n"
+        "Usage: autoclave [-h] [-c COUNT] [-l] [-e] [-f MAX_FAILURES]\n"
         "                 [-o OUT_PATH] [-r MAX_RUNS] [-t TIMEOUT]\n"
         "                 [-v] [-w WAIT_MSEC] [-x CMD] program\n"
         "\n"
         "    -h:         help\n"
         "    -c COUNT:   rotate log files by count\n"
-        "    -e:         log stderr\n"
         "    -f COUNT:   max failures (def. 1)\n"
         "    -l:         log stdout\n"
+        "    -e:         log stderr\n"
         "    -o PATH:    log output path\n"
-        //"    -p CMD:     command to pipe completed log files through\n"
         "    -r COUNT:   max runs (def. no limit)\n"
         "    -t SEC:     timeout for watched program\n"
+        "    -s:         supervise (abbreviation for `-l -e -v`)\n"
         "    -v:         increase verbosity\n"
         "    -w MSEC:    wait W msec between executions (def. 100)\n"
         "    -x CMD:     execute command on error/timeout\n"
@@ -76,7 +76,7 @@ static void usage(const char *msg) {
 
 static void handle_args(config *cfg, int argc, char **argv) {
     int fl = 0;
-    while ((fl = getopt(argc, argv, "hc:ef:lo:r:t:vw:x:")) != -1) {
+    while ((fl = getopt(argc, argv, "hc:ef:lo:r:st:vw:x:")) != -1) {
         switch (fl) {
         case 'h':               /* help */
             usage(NULL);
@@ -97,13 +97,13 @@ static void handle_args(config *cfg, int argc, char **argv) {
         case 'o':               /* out path */
             cfg->out_path = optarg;
             break;
-#if 0 /* TODO*/
-        case 'p':               /* output pipe; NYI */
-            cfg->out_pipe = optarg;
-            break;
-#endif
         case 'r':               /* max runs */
             cfg->max_runs = atoll(optarg);
+            break;
+        case 's':               /* supervise: abbreviation for -l -e -v */
+            cfg->log_stdout = true;
+            cfg->log_stderr = true;
+            cfg->verbosity++;
             break;
         case 't':               /* timeout */
             cfg->timeout = atoi(optarg);
@@ -199,11 +199,9 @@ static bool try_exec(config *cfg, size_t id, child_status *status) {
     } else if (kid == 0) {      /* child */
         if (outlog != -1) {
             if (-1 == dup2(outlog, STDOUT_FILENO)) { err(1, "dup2"); }
-            /* TODO: pipe through out_pipe */
         }
         if (errlog != -1) {
             if (-1 == dup2(errlog, STDERR_FILENO)) { err(1, "dup2"); }
-            /* TODO: pipe through out_pipe */
         }
         
         /* TODO: could write id into argument if ARGV[n] is "%" */

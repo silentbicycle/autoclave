@@ -50,6 +50,10 @@ Same, but log stderr as well as stdout (keeping 10 files):
 
     $ autoclave -l -e -c 5 buggy_program
 
+A shortcut for `autoclave -l -e -v` ('s' for 'supervise'):
+
+    $ autoclave -s buggy_program
+
 Repeatedly run buggy_program until it has failed 10 times:
 
     $ autoclave -f 10 buggy_program
