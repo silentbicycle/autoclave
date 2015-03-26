@@ -33,10 +33,10 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-/* Version 0.1.0 +[execvp, argv offset, alert_pipe, better_rotation, wait_msec]. */
+/* Version 0.1.1 */
 #define AUTOCLAVE_VERSION_MAJOR 0
 #define AUTOCLAVE_VERSION_MINOR 1
-#define AUTOCLAVE_VERSION_PATCH 0
+#define AUTOCLAVE_VERSION_PATCH 1
 #define AUTOCLAVE_AUTHOR "Scott Vokes <vokes.s@gmail.com>"
 
 #include "types.h"
