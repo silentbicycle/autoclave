@@ -1,19 +1,19 @@
 .\" generated with Ronn/v0.7.3
 .\" http://github.com/rtomayko/ronn/tree/0.7.3
 .
-.TH "AUTOCLAVE" "1" "January 2015" "" ""
+.TH "AUTOCLAVE" "1" "March 2015" "" ""
 .
 .SH "SYNOPSIS"
-autoclave [\-h] [\-c COUNT] [\-l] [\-e] [\-f MAX_FAILURES] [\-o OUT_PATH] [\-r MAX_RUNS] [\-t TIMEOUT] [\-v] [\-w WAIT] [\-x CMD] \fIcommand line\fR
+autoclave [\-h] [\-c COUNT] [\-l] [\-e] [\-f MAX_FAILURES] [\-o OUT_PATH] [\-r MAX_RUNS] [\-s] [\-t TIMEOUT] [\-v] [\-w WAIT] [\-x CMD] \fIcommand line\fR
 .
 .SH "DESCRIPTION"
-autoclave repeatedly executes a command line until its process exits with a non\-zero status, is stopped/terminated by a signal, a user\-specified timeout (\-t) runs out, or a user\-specified number of runs (\-r) have passed without any failures\.
+autoclave repeatedly executes a command line until its process exits with a non\-zero status, is stopped/terminated by a signal, a user\-specified timeout (\-t) occurs, or a user\-specified number of runs (\-r) have passed without any failures\.
 .
 .P
-It can log the contents of stdout (\-l) and/or stderr (\-e), and can rotate the log files so a fixed number of logs are kept (\-c)\.
+It can log the contents of stdout (\-l) and/or stderr (\-e), and can rotate the log files so a fixed number of logs are kept (\-c)\. If running in verbose (\-v) mode, a timestamp and run/failure counts will be printed\. (Supervise (\-s) is an abbreviation for \fB\-l \-e \-v\fR\.)
 .
 .P
-On failure, a handler program (\-x) can be called with informaiton about the child process\. That way, a debugger can be opened if the stressed program times out or dumps core\.
+On failure, a handler program (\-x) can be called with informaiton about the child process\. That way, a debugger can be opened if the stressed program times out or dumps core\. This program must be in the path\.
 .
 .SH "OPTIONS"
 .
@@ -34,6 +34,10 @@ Log stdout\. Defaults to false\. Log output paths default to \fBPROG_PATH/PROG_N
 Log stderr\. Defaults to false\.
 .
 .TP
+\fB\-f FAILURES\fR
+Run for multiple failures, rather than exiting after the first\.
+.
+.TP
 \fB\-o\fR
 Set the output path and base name for logs\. Defaults to the first part of the command line given to autoclave\.
 .
@@ -42,6 +46,10 @@ Set the output path and base name for logs\. Defaults to the first part of the c
 .
 .IP
 If MAX_RUNS executions of the command line complete without any failures, then terminate autoclave with a return value of \fBEXIT_SUCCESS\fR\.
+.
+.TP
+\fB\-s\fR
+Supervise \- An abbreviation for \fB\-l \-e \-v\fR, which are often used together\.
 .
 .TP
 \fB\-t TIMEOUT\fR
@@ -57,7 +65,7 @@ Wait SECONDS between executing the command line each time\. Defaults to 1\.
 .
 .TP
 \fB\-x CMD\fR
-If a failure occurs, call CMD\. See ENVIRONMENT\.
+If a failure occurs, run CMD\. See ENVIRONMENT\.
 .
 .SH "ENVIRONMENT"
 The failure handler will be called with the following environment variables defined:
@@ -89,6 +97,14 @@ The signal that terminated the child process, if any\.
 .TP
 \fBAUTOCLAVE_STOP_SIGNAL\fR
 The signal that caused the child process to stop, if any\.
+.
+.TP
+\fBAUTOCLAVE_STDOUT_LOG\fR
+The current stdout log file, if any\.
+.
+.TP
+\fBAUTOCLAVE_STDERR_LOG\fR
+The current stderr log file, if any\.
 .
 .SH "EXIT STATUS"
 Returns 0 if the maximum number of runs (\-r) executed without any failures, or 1 otherwise\.
@@ -241,6 +257,9 @@ All monitoring is based on the child process directly created by forking and exe
 .
 .P
 There may be race conditions in the child process error handling logic\.
+.
+.P
+If \-f is used to track multiple failures in combination with \-c, log rotation may delete older logs with information about failures\.
 .
 .SH "COPYRIGHT"
 \fBautoclave\fR is Copyright (C) 2015 Scott Vokes \fIvokes\.s@gmail\.com\fR\.
