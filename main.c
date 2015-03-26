@@ -33,7 +33,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-/* Version 0.1.0 +[execvp, argv offset, wait_double, alert_pipe]. */
+/* Version 0.1.0 +[execvp, argv offset, alert_pipe, better_rotation, wait_msec]. */
 #define AUTOCLAVE_VERSION_MAJOR 0
 #define AUTOCLAVE_VERSION_MINOR 1
 #define AUTOCLAVE_VERSION_PATCH 0
@@ -160,9 +160,7 @@ static void sigchild_handler(int sig) {
 }
 
 static int log_path(char *buf, size_t buf_size,
-        config *cfg, size_t id, char *fdname) {
-    if (cfg->rot.type == ROT_COUNT) { id = id % cfg->rot.u.count.count; }
-
+        config *cfg, size_t id, const char *fdname) {
     int res = snprintf(buf, buf_size, "%s.%zd.%s.log",
         cfg->out_path, id, fdname);
 
@@ -242,7 +240,9 @@ static bool try_exec(config *cfg, size_t id, child_status *status) {
         }
 
         if (failed && cfg->error_handler != NULL) {
-            setenv_and_call_handler(cfg, status);
+            setenv_and_call_handler(cfg, status,
+                outlog != -1 ? outlogbuf : NULL,
+                errlog != -1 ? errlogbuf : NULL);
         } else if (status->reason == REASON_TIMEOUT) {
             int res = kill(kid, SIGINT);
             if (res == -1) {
@@ -258,12 +258,36 @@ static bool try_exec(config *cfg, size_t id, child_status *status) {
     }
 
     if (outlog != -1) {
-        if (-1 == close(outlog)) { err(1, "close"); }
+        close_log(outlog, failed);
+        rotate_log(cfg, "stdout", id);
     }
     if (errlog != -1) {
-        if (-1 == close(errlog)) { err(1, "close"); }
+        close_log(errlog, failed);
+        rotate_log(cfg, "stderr", id);
     }
     return failed;
+}
+
+static void close_log(int fd, bool failed) {
+    if (-1 == close(fd)) { err(1, "close"); }
+}
+
+static void rotate_log(config *cfg, const char *tag, int id) {
+    if (cfg->rot.type == ROT_COUNT) {
+        int count = cfg->rot.u.count.count;
+        if (id >= count) {
+            char oldlogbuf[PATH_MAX];
+            log_path(oldlogbuf, PATH_MAX, cfg, id - count, tag);
+            int res = unlink(oldlogbuf);
+            if (res == -1) {
+                if (errno == ENOENT) {
+                    errno = 0;  /* can't delete missing file. okay. */
+                } else {
+                    err(1, "unlink");
+                }
+            }
+        }
+    }
 }
 
 static int supervise_process(config *cfg, child_status *status,
@@ -316,7 +340,8 @@ static int supervise_process(config *cfg, child_status *status,
     return stat_loc;
 }
 
-static void setenv_and_call_handler(config *cfg, child_status *status) {
+static void setenv_and_call_handler(config *cfg, child_status *status,
+        char *stdout_log_path, char *stderr_log_path) {
     setenv("AUTOCLAVE_DUMPED_CORE",
         status->dumped_core ? "1" : "0", 1);
     setenv("AUTOCLAVE_FAIL_TYPE", status->reason, 1);
@@ -343,7 +368,14 @@ static void setenv_and_call_handler(config *cfg, child_status *status) {
         setenv("AUTOCLAVE_RUN_ID", id_buf, 1);
     }
     setenv("AUTOCLAVE_CMD", cfg->argv[0], 1);
-    
+
+    if (stdout_log_path) {
+        setenv("AUTOCLAVE_STDOUT_LOG", stdout_log_path, 1);
+    }
+    if (stderr_log_path) {
+        setenv("AUTOCLAVE_STDERR_LOG", stderr_log_path, 1);
+    }
+
     if (-1 == system(cfg->error_handler)) {
         err(1, "system");
     }

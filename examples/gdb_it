@@ -11,6 +11,8 @@ echo -- dumped core ? ${AUTOCLAVE_DUMPED_CORE}
 echo -- exit status: ${AUTOCLAVE_EXIT_STATUS}
 echo -- term signal: ${AUTOCLAVE_TERM_SIGNAL}
 echo -- stop signal: ${AUTOCLAVE_STOP_SIGNAL}
+echo -- stdout log: ${AUTOCLAVE_STDOUT_LOG}
+echo -- stderr log: ${AUTOCLAVE_STDERR_LOG}
 
 if [ "timeout" = ${AUTOCLAVE_FAIL_TYPE} ]; then
     gdb --pid=${AUTOCLAVE_CHILD_PID} ${AUTOCLAVE_CMD}
