@@ -6,7 +6,6 @@ typedef enum {
     ROT_COUNT,
 } rot_t;
 
-#define TIMED_OUT 126
 #define NO_TIMEOUT (-1)
 
 typedef struct {
@@ -25,13 +24,10 @@ typedef struct {
     bool log_stderr;
     char *out_path;
     rotation rot;
-    double wait;
+    size_t wait;
     int timeout;
     int verbosity;
     char *error_handler;
-
-    /* TODO */
-    //char *out_pipe;
 
     int argc;
     char **argv;

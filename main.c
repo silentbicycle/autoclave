@@ -55,7 +55,7 @@ static void usage(const char *msg) {
     fprintf(stderr,
         "Usage: autoclave [-h] [-c COUNT] [-e] [-l] [-f MAX_FAILURES]\n"
         "                 [-o OUT_PATH] [-r MAX_RUNS] [-t TIMEOUT]\n"
-        "                 [-v] [-w WAIT] [-x CMD]\n"
+        "                 [-v] [-w WAIT_MSEC] [-x CMD] program\n"
         "\n"
         "    -h:         help\n"
         "    -c COUNT:   rotate log files by count\n"
@@ -67,7 +67,7 @@ static void usage(const char *msg) {
         "    -r COUNT:   max runs (def. no limit)\n"
         "    -t SEC:     timeout for watched program\n"
         "    -v:         increase verbosity\n"
-        "    -w SEC:     wait W seconds between executions (def. 1)\n"
+        "    -w MSEC:    wait W msec between executions (def. 100)\n"
         "    -x CMD:     execute command on error/timeout\n"
         );
     
@@ -112,7 +112,7 @@ static void handle_args(config *cfg, int argc, char **argv) {
             cfg->verbosity++;
             break;
         case 'w':               /* wait */
-            cfg->wait = strtod(optarg, NULL);
+            cfg->wait = strtol(optarg, NULL, 10);
             break;
         case 'x':               /* execute error handler */
             cfg->error_handler = optarg;
@@ -370,7 +370,7 @@ static int mainloop(config *cfg) {
                 failures, failures == 1 ? "" : "s");
         }
         if (cfg->wait > 0) {
-            poll(NULL, 0, (int)(1000.0 * cfg->wait));
+            poll(NULL, 0, (int)(cfg->wait));
         }
     }
     return (failures > 0 ? 1 : 0);
@@ -396,7 +396,7 @@ int main(int argc, char **argv) {
     config cfg = {
         .max_failures = 1,
         .max_runs = (size_t)-1,
-        .wait = 0.1,
+        .wait = 100,
         .timeout = NO_TIMEOUT,
     };
     handle_args(&cfg, argc, argv);
