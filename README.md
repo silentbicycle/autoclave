@@ -16,7 +16,10 @@ the child process. That way, a debugger can be opened if the stressed
 program times out or dumps core. For particularly long-running stress
 tests, the handler amy also be a great place to send a notification.
 
-For more detailed usage info, see the examples below and the man page.
+For more detailed usage info, see the examples below the man page,
+and this [blog post][1].
+
+[1]: https://spin.atomicobject.com/2015/04/03/autoclave-pressure-cooker-for-programs/
 
 
 ## Examples
