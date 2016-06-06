@@ -14,7 +14,7 @@ rotate the log files so a fixed number of logs are kept (-c).
 On failure, a handler program (-x) can be called with information about
 the child process. That way, a debugger can be opened if the stressed
 program times out or dumps core. For particularly long-running stress
-tests, the handler amy also be a great place to send a notification.
+tests, the handler may also be a great place to send a notification.
 
 For more detailed usage info, see the examples below the man page,
 and this [blog post][1].
