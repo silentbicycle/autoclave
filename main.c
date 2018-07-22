@@ -59,7 +59,7 @@ static void usage(const char *msg) {
     fprintf(stderr,
         "Usage: autoclave [-h] [-c <count>] [-l] [-e] [-f <max_failures>]\n"
         "                 [-i <id_str>] [-o <output_prefix>] [-r <max_runs>]\n"
-        "                 [-s] [-t <timeout>] [-v] [-w <wait_msec>]\n"
+        "                 [-s] [-t <timeout_sec>] [-v] [-w <wait_msec>]\n"
         "                 [-x <cmd>] <command line>\n"
         "\n"
         "    -h:         print this help\n"
@@ -70,7 +70,7 @@ static void usage(const char *msg) {
         "    -e:         log stderr\n"
         "    -o PATH:    log output prefix (default: program's $0)\n"
         "    -r COUNT:   max runs (def. no limit)\n"
-        "    -t SEC:     timeout for watched program\n"
+        "    -t SEC:     timeout for watched program (in seconds)\n"
         "    -s:         supervise (abbreviation for `-l -e -v`)\n"
         "    -v:         increase verbosity\n"
         "    -w MSEC:    wait W msec between executions (def. 100)\n"
@@ -114,14 +114,14 @@ static void handle_args(struct config *cfg, int argc, char **argv) {
             cfg->log_stderr = true;
             cfg->verbosity++;
             break;
-        case 't':               /* timeout */
-            cfg->timeout = atoi(optarg);
+        case 't':               /* timeout (in sec) */
+            cfg->timeout_sec = (size_t)strtoll(optarg, NULL, 10);
             break;
         case 'v':               /* verbosity */
             cfg->verbosity++;
             break;
-        case 'w':               /* wait */
-            cfg->wait = (size_t)strtoll(optarg, NULL, 10);
+        case 'w':               /* wait (in msec.) */
+            cfg->wait_msec = (size_t)strtoll(optarg, NULL, 10);
             break;
         case 'x':               /* execute error handler */
             cfg->error_handler = optarg;
@@ -362,7 +362,7 @@ static int supervise_process(struct child_status *status, bool *timed_out) {
     int stat_loc = 0;
     size_t ticks = 0;
     const int sleep_msec = 100;
-    const size_t max_ticks = (size_t)cfg->timeout * (1000 / sleep_msec);
+    const size_t max_ticks = (size_t)cfg->timeout_sec * (1000 / sleep_msec);
     
     struct pollfd fds[] = {
         {
@@ -396,7 +396,7 @@ static int supervise_process(struct child_status *status, bool *timed_out) {
                     }
                 }
             }
-            if (cfg->timeout != NO_TIMEOUT) { ticks++; }
+            if (cfg->timeout_sec != NO_TIMEOUT) { ticks++; }
         } else {
             assert(res == status->pid);
             break;
@@ -463,8 +463,8 @@ static int mainloop(void) {
                 state.run_id, state.run_id == 1 ? "" : "s",
                 state.failures, state.failures == 1 ? "" : "s");
         }
-        if (cfg->wait > 0) {
-            poll(NULL, 0, (int)(cfg->wait));
+        if (cfg->wait_msec > 0) {
+            poll(NULL, 0, (int)(cfg->wait_msec));
         }
     }
     print_stats();
@@ -509,8 +509,8 @@ int main(int argc, char **argv) {
     struct config config = {
         .max_failures = 1,
         .max_runs = (size_t)-1,
-        .wait = 100,
-        .timeout = NO_TIMEOUT,
+        .wait_msec = 100,
+        .timeout_sec = NO_TIMEOUT,
     };
     handle_args(&config, argc, argv);
     cfg = &config;              /* After this point, cfg is const */

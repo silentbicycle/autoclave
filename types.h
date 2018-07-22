@@ -24,8 +24,8 @@ struct config {
     bool log_stderr;
     char *output_prefix;
     struct rotation rot;
-    size_t wait;
-    int timeout;
+    size_t wait_msec;
+    int timeout_sec;
     int verbosity;
     char *error_handler;
     char *run_id_str;
