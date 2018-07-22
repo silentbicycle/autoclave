@@ -1,6 +1,6 @@
 PROJECT =	autoclave
 OPTIMIZE =	-O3
-WARN =		-Wall -pedantic #-Wextra
+WARN =		-Wall -pedantic -Wextra
 CSTD +=		-std=c99 -D_POSIX_C_SOURCE=200112L #-D_C99_SOURCE
 CDEFS +=
 CFLAGS +=	${CSTD} -g ${WARN} ${CDEFS} ${OPTIMIZE}

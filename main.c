@@ -83,13 +83,13 @@ static void handle_args(struct config *cfg, int argc, char **argv) {
             break;
         case 'c':               /* rotation count */
             cfg->rot.type = ROT_COUNT;
-            cfg->rot.u.count.count = atoll(optarg);
+            cfg->rot.u.count.count = (size_t)atoll(optarg);
             break;
         case 'e':               /* log stderr */
             cfg->log_stderr = true;
             break;
         case 'f':               /* max failures */
-            cfg->max_failures = atoll(optarg);
+            cfg->max_failures = (size_t)atoll(optarg);
             break;
         case 'l':               /* log stdout */
             cfg->log_stdout = true;
@@ -98,7 +98,7 @@ static void handle_args(struct config *cfg, int argc, char **argv) {
             cfg->out_path = optarg;
             break;
         case 'r':               /* max runs */
-            cfg->max_runs = atoll(optarg);
+            cfg->max_runs = (size_t)atoll(optarg);
             break;
         case 's':               /* supervise: abbreviation for -l -e -v */
             cfg->log_stdout = true;
@@ -112,7 +112,7 @@ static void handle_args(struct config *cfg, int argc, char **argv) {
             cfg->verbosity++;
             break;
         case 'w':               /* wait */
-            cfg->wait = strtol(optarg, NULL, 10);
+            cfg->wait = (size_t)strtoll(optarg, NULL, 10);
             break;
         case 'x':               /* execute error handler */
             cfg->error_handler = optarg;
@@ -143,6 +143,7 @@ static int alert_rd_pipe;
  * it's just used to interrupt the poll and wake the
  * supervisor process up immediately .*/
 static void sigchild_handler(int sig) {
+    assert(sig == SIGCHLD);
     for (int retries = 0; retries < 100; retries++) {
         /* POSIX.1-2004 requires calling write(2) in a
          * signal handler to be safe. */
@@ -164,7 +165,7 @@ static int log_path(char *buf, size_t buf_size,
     int res = snprintf(buf, buf_size, "%s.%zd.%s.log",
         cfg->out_path, id, fdname);
 
-    if (buf_size < res) {
+    if ((int)buf_size < res) {
         fprintf(stderr, "snprintf: path too long\n");
         exit(1);
     }
@@ -271,11 +272,12 @@ static bool try_exec(struct config *cfg, size_t id,
 
 static void close_log(int fd, bool failed) {
     if (-1 == close(fd)) { err(1, "close"); }
+    (void)failed;               /* TODO: rename with _pass / _FAIL? */
 }
 
-static void rotate_log(struct config *cfg, const char *tag, int id) {
+static void rotate_log(struct config *cfg, const char *tag, size_t id) {
     if (cfg->rot.type == ROT_COUNT) {
-        int count = cfg->rot.u.count.count;
+        size_t count = cfg->rot.u.count.count;
         if (id >= count) {
             char oldlogbuf[PATH_MAX];
             log_path(oldlogbuf, PATH_MAX, cfg, id - count, tag);
@@ -307,7 +309,7 @@ static int supervise_process(struct config *cfg,
     
     while (ticks < max_ticks) {
         /* Poll for child process termination. */
-        pid_t res = waitpid(status->pid, &stat_loc, WNOHANG);
+        const pid_t res = waitpid(status->pid, &stat_loc, WNOHANG);
         if (res == -1) {
             if (errno == EINTR) {
                 errno = 0;
@@ -316,8 +318,8 @@ static int supervise_process(struct config *cfg,
             }
         } else if (res == 0) {
             /* Sleep 100 msec, unless a SIGCHLD wakes it up. */
-            int res = poll(fds, 1, sleep_msec);
-            if (res == 1) {
+            const int poll_res = poll(fds, 1, sleep_msec);
+            if (poll_res == 1) {
                 char buf[8];
                 ssize_t rd = read(alert_rd_pipe, buf, sizeof(buf));
                 if (rd >= 0) {
@@ -423,6 +425,8 @@ static void init_sigchild_alert(void) {
 }
 
 int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
     init_sigchild_alert();
 
     struct config cfg = {

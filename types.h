@@ -35,7 +35,7 @@ struct config {
 
 struct child_status {
     pid_t pid;
-    int run_id;
+    size_t run_id;
     const char *reason;
     bool dumped_core;
     uint8_t exit_status;
@@ -58,6 +58,6 @@ static void setenv_and_call_handler(struct config *cfg,
 static int mainloop(struct config *cfg);
 static void init_sigchild_alert(void);
 static void close_log(int fd, bool failed);
-static void rotate_log(struct config *cfg, const char *tag, int id);
+static void rotate_log(struct config *cfg, const char *tag, size_t id);
 
 #endif

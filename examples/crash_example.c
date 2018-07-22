@@ -19,6 +19,8 @@ void crash(int arg) {
 }
 
 int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
     int i = 0;
     struct timeval tv;
     gettimeofday(&tv, NULL);
