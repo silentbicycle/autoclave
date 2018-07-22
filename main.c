@@ -74,7 +74,7 @@ static void usage(const char *msg) {
     exit(1);
 }
 
-static void handle_args(config *cfg, int argc, char **argv) {
+static void handle_args(struct config *cfg, int argc, char **argv) {
     int fl = 0;
     while ((fl = getopt(argc, argv, "hc:ef:lo:r:st:vw:x:")) != -1) {
         switch (fl) {
@@ -160,7 +160,7 @@ static void sigchild_handler(int sig) {
 }
 
 static int log_path(char *buf, size_t buf_size,
-        config *cfg, size_t id, const char *fdname) {
+        struct config *cfg, size_t id, const char *fdname) {
     int res = snprintf(buf, buf_size, "%s.%zd.%s.log",
         cfg->out_path, id, fdname);
 
@@ -171,7 +171,8 @@ static int log_path(char *buf, size_t buf_size,
     return res;
 }
 
-static bool try_exec(config *cfg, size_t id, child_status *status) {
+static bool try_exec(struct config *cfg, size_t id,
+    struct child_status *status) {
     memset(status, 0, sizeof(*status));
     char outlogbuf[PATH_MAX];
     int outlog = -1;
@@ -272,7 +273,7 @@ static void close_log(int fd, bool failed) {
     if (-1 == close(fd)) { err(1, "close"); }
 }
 
-static void rotate_log(config *cfg, const char *tag, int id) {
+static void rotate_log(struct config *cfg, const char *tag, int id) {
     if (cfg->rot.type == ROT_COUNT) {
         int count = cfg->rot.u.count.count;
         if (id >= count) {
@@ -290,8 +291,8 @@ static void rotate_log(config *cfg, const char *tag, int id) {
     }
 }
 
-static int supervise_process(config *cfg, child_status *status,
-        bool *timed_out) {
+static int supervise_process(struct config *cfg,
+    struct child_status *status, bool *timed_out) {
     int stat_loc = 0;
     size_t ticks = 0;
     const int sleep_msec = 100;
@@ -340,8 +341,9 @@ static int supervise_process(config *cfg, child_status *status,
     return stat_loc;
 }
 
-static void setenv_and_call_handler(config *cfg, child_status *status,
-        char *stdout_log_path, char *stderr_log_path) {
+static void setenv_and_call_handler(struct config *cfg, struct
+    child_status *status,
+    char *stdout_log_path, char *stderr_log_path) {
     setenv("AUTOCLAVE_DUMPED_CORE",
         status->dumped_core ? "1" : "0", 1);
     setenv("AUTOCLAVE_FAIL_TYPE", status->reason, 1);
@@ -381,14 +383,14 @@ static void setenv_and_call_handler(config *cfg, child_status *status,
     }
 }
 
-static int mainloop(config *cfg) {
+static int mainloop(struct config *cfg) {
     size_t failures = 0;
 
     size_t run_id = 0;
     while (run_id < cfg->max_runs) {
         struct timeval tv;
         if (0 != gettimeofday(&tv, NULL)) { err(1, "gettimeofday"); }
-        child_status s;
+        struct child_status s;
         bool failed = try_exec(cfg, run_id, &s);
         if (failed) { failures++; }
         if (failures >= cfg->max_failures) { break; }
@@ -423,7 +425,7 @@ static void init_sigchild_alert(void) {
 int main(int argc, char **argv) {
     init_sigchild_alert();
 
-    config cfg = {
+    struct config cfg = {
         .max_failures = 1,
         .max_runs = (size_t)-1,
         .wait = 100,
