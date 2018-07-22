@@ -8,11 +8,14 @@
 #include <err.h>
 #include <errno.h>
 #include <sys/time.h>
+#include <sys/types.h>
 
 void crash(int arg) {
     (void)arg;
+    pid_t pid = getpid();
     int v = rand() % 100;
-    //printf("v %d\n", v);
+    /* Print this, so there's some output in the logs */
+    printf("%llu: %d\n", (unsigned long long)pid, v);
     if (v == 1) {
         abort();
     }
