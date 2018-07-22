@@ -31,7 +31,9 @@ struct config {
 
     int argc;
     char **argv;
+};
 
+struct state {
     size_t run_id;
     size_t failures;
 };
@@ -52,7 +54,7 @@ enum log_status {
     LOG_FAIL,
 };
 
-static void handle_args(int argc, char **argv);
+static void handle_args(struct config *cfg, int argc, char **argv);
 static void sigchild_handler(int sig);
 static int log_path(char *buf, size_t buf_size,
     size_t id, const char *fdname,

@@ -47,13 +47,9 @@ static const char REASON_EXIT[] = "exit";
 static const char REASON_TERM[] = "term";
 static const char REASON_STOP[] = "stop";
 
-/* Configuration and defaults */
-static struct config cfg = {
-    .max_failures = 1,
-    .max_runs = (size_t)-1,
-    .wait = 100,
-    .timeout = NO_TIMEOUT,
-};
+static const struct config * cfg;
+
+static struct state state;
 
 static void usage(const char *msg) {
     if (msg) { fprintf(stderr, "%s\n\n", msg); }
@@ -82,7 +78,7 @@ static void usage(const char *msg) {
     exit(1);
 }
 
-static void handle_args(int argc, char **argv) {
+static void handle_args(struct config *cfg, int argc, char **argv) {
     int fl = 0;
     while ((fl = getopt(argc, argv, "hc:ef:lo:r:st:vw:x:")) != -1) {
         switch (fl) {
@@ -90,40 +86,40 @@ static void handle_args(int argc, char **argv) {
             usage(NULL);
             break;
         case 'c':               /* rotation count */
-            cfg.rot.type = ROT_COUNT;
-            cfg.rot.u.count.count = (size_t)atoll(optarg);
+            cfg->rot.type = ROT_COUNT;
+            cfg->rot.u.count.count = (size_t)atoll(optarg);
             break;
         case 'e':               /* log stderr */
-            cfg.log_stderr = true;
+            cfg->log_stderr = true;
             break;
         case 'f':               /* max failures */
-            cfg.max_failures = (size_t)atoll(optarg);
+            cfg->max_failures = (size_t)atoll(optarg);
             break;
         case 'l':               /* log stdout */
-            cfg.log_stdout = true;
+            cfg->log_stdout = true;
             break;
         case 'o':               /* out path */
-            cfg.out_path = optarg;
+            cfg->out_path = optarg;
             break;
         case 'r':               /* max runs */
-            cfg.max_runs = (size_t)atoll(optarg);
+            cfg->max_runs = (size_t)atoll(optarg);
             break;
         case 's':               /* supervise: abbreviation for -l -e -v */
-            cfg.log_stdout = true;
-            cfg.log_stderr = true;
-            cfg.verbosity++;
+            cfg->log_stdout = true;
+            cfg->log_stderr = true;
+            cfg->verbosity++;
             break;
         case 't':               /* timeout */
-            cfg.timeout = atoi(optarg);
+            cfg->timeout = atoi(optarg);
             break;
         case 'v':               /* verbosity */
-            cfg.verbosity++;
+            cfg->verbosity++;
             break;
         case 'w':               /* wait */
-            cfg.wait = (size_t)strtoll(optarg, NULL, 10);
+            cfg->wait = (size_t)strtoll(optarg, NULL, 10);
             break;
         case 'x':               /* execute error handler */
-            cfg.error_handler = optarg;
+            cfg->error_handler = optarg;
             break;
         case '?':
         default:
@@ -133,12 +129,12 @@ static void handle_args(int argc, char **argv) {
 
     argc -= (optind - 1);
     argv += (optind - 1);
-    cfg.argc = argc - 1;
-    cfg.argv = argv + 1;
+    cfg->argc = argc - 1;
+    cfg->argv = argv + 1;
 
-    if (cfg.argc < 1) { usage(NULL); }
-    if (cfg.out_path == NULL) {
-        cfg.out_path = cfg.argv[0];
+    if (cfg->argc < 1) { usage(NULL); }
+    if (cfg->out_path == NULL) {
+        cfg->out_path = cfg->argv[0];
     }
 }    
 
@@ -172,7 +168,7 @@ static void sigchild_handler(int sig) {
 static void sigint_handler(int sig) {
     assert(sig == SIGINT);
     print_stats();
-    exit(cfg.failures > 0 ? EXIT_FAILURE : EXIT_SUCCESS);
+    exit(state.failures > 0 ? EXIT_FAILURE : EXIT_SUCCESS);
 }
 
 static int log_path(char *buf, size_t buf_size,
@@ -196,7 +192,7 @@ static int log_path(char *buf, size_t buf_size,
     }
 
     int res = snprintf(buf, buf_size, "%s%s.%zd.%s.log",
-        cfg.out_path, status_suffix, id, fdname);
+        cfg->out_path, status_suffix, id, fdname);
 
     if ((int)buf_size < res) {
         fprintf(stderr, "snprintf: path too long\n");
@@ -213,7 +209,7 @@ static bool try_exec(size_t id, struct child_status *status) {
     const char *tag_stdout = "stdout";
     const char *tag_stderr = "stderr";
 
-    if (cfg.log_stdout) {
+    if (cfg->log_stdout) {
         log_path(outlogbuf, PATH_MAX, id, tag_stdout, LOG_RUNNING);
         outlog = open(outlogbuf, O_WRONLY | O_TRUNC | O_CREAT, 0644);
         if (outlog == -1) { err(1, "open"); }
@@ -221,7 +217,7 @@ static bool try_exec(size_t id, struct child_status *status) {
 
     char errlogbuf[PATH_MAX];
     int errlog = -1;
-    if (cfg.log_stderr) {
+    if (cfg->log_stderr) {
         log_path(errlogbuf, PATH_MAX, id, tag_stderr, LOG_RUNNING);
         errlog = open(errlogbuf, O_WRONLY | O_TRUNC | O_CREAT, 0644);
         if (errlog == -1) { err(1, "open"); }
@@ -240,7 +236,7 @@ static bool try_exec(size_t id, struct child_status *status) {
         }
         
         /* TODO: could write id into argument if ARGV[n] is "%" */
-        int res = execvp(cfg.argv[0], &cfg.argv[0]);
+        int res = execvp(cfg->argv[0], &cfg->argv[0]);
         if (res == -1) { err(1, "execvp"); }
     } else {                   /* parent */
         status->pid = kid;
@@ -269,14 +265,14 @@ static bool try_exec(size_t id, struct child_status *status) {
             failed = true;
         }
 
-        if (cfg.verbosity > 1) {
+        if (cfg->verbosity > 1) {
             printf(" -- type: %s, core? %d, exit: %d, term: %d, stop: %d\n",
                 status->reason, status->dumped_core,
                 status->exit_status, status->term_signal,
                 status->stop_signal);
         }
 
-        if (failed && cfg.error_handler != NULL) {
+        if (failed && cfg->error_handler != NULL) {
             setenv_and_call_handler(status,
                 outlog != -1 ? outlogbuf : NULL,
                 errlog != -1 ? errlogbuf : NULL);
@@ -324,8 +320,8 @@ static void rename_log(const char *tag, size_t id, bool failed) {
 }
 
 static void rotate_log(const char *tag, size_t id) {
-    if (cfg.rot.type == ROT_COUNT) {
-        const size_t count = cfg.rot.u.count.count;
+    if (cfg->rot.type == ROT_COUNT) {
+        const size_t count = cfg->rot.u.count.count;
         char oldlogbuf[PATH_MAX];
         /* Only rotate logs from passing runs */
         log_path(oldlogbuf, PATH_MAX, id - count, tag, LOG_PASS);
@@ -349,7 +345,7 @@ static int supervise_process(struct child_status *status, bool *timed_out) {
     int stat_loc = 0;
     size_t ticks = 0;
     const int sleep_msec = 100;
-    const size_t max_ticks = (size_t)cfg.timeout * (1000 / sleep_msec);
+    const size_t max_ticks = (size_t)cfg->timeout * (1000 / sleep_msec);
     
     struct pollfd fds[] = {
         {
@@ -383,7 +379,7 @@ static int supervise_process(struct child_status *status, bool *timed_out) {
                     }
                 }
             }
-            if (cfg.timeout != NO_TIMEOUT) { ticks++; }
+            if (cfg->timeout != NO_TIMEOUT) { ticks++; }
         } else {
             assert(res == status->pid);
             break;
@@ -421,7 +417,7 @@ static void setenv_and_call_handler(struct child_status *status,
     if (sz >= snprintf(id_buf, sz, "%d", (int)status->run_id)) {
         setenv("AUTOCLAVE_RUN_ID", id_buf, 1);
     }
-    setenv("AUTOCLAVE_CMD", cfg.argv[0], 1);
+    setenv("AUTOCLAVE_CMD", cfg->argv[0], 1);
 
     if (stdout_log_path) {
         setenv("AUTOCLAVE_STDOUT_LOG", stdout_log_path, 1);
@@ -430,32 +426,32 @@ static void setenv_and_call_handler(struct child_status *status,
         setenv("AUTOCLAVE_STDERR_LOG", stderr_log_path, 1);
     }
 
-    if (-1 == system(cfg.error_handler)) {
+    if (-1 == system(cfg->error_handler)) {
         err(1, "system");
     }
 }
 
 static int mainloop(void) {
-    while (cfg.run_id < cfg.max_runs) {
+    while (state.run_id < cfg->max_runs) {
         struct timeval tv;
         if (0 != gettimeofday(&tv, NULL)) { err(1, "gettimeofday"); }
         struct child_status s;
-        bool failed = try_exec(cfg.run_id, &s);
-        if (failed) { cfg.failures++; }
-        if (cfg.failures >= cfg.max_failures) { break; }
-        cfg.run_id++;
-        if (cfg.verbosity > 0) {
+        bool failed = try_exec(state.run_id, &s);
+        if (failed) { state.failures++; }
+        if (state.failures >= cfg->max_failures) { break; }
+        state.run_id++;
+        if (cfg->verbosity > 0) {
             printf("%08lld.%06lld -- %zd run%s, %zd failure%s\n",
                 (long long)tv.tv_sec, (long long)tv.tv_usec,
-                cfg.run_id, cfg.run_id == 1 ? "" : "s",
-                cfg.failures, cfg.failures == 1 ? "" : "s");
+                state.run_id, state.run_id == 1 ? "" : "s",
+                state.failures, state.failures == 1 ? "" : "s");
         }
-        if (cfg.wait > 0) {
-            poll(NULL, 0, (int)(cfg.wait));
+        if (cfg->wait > 0) {
+            poll(NULL, 0, (int)(cfg->wait));
         }
     }
     print_stats();
-    return cfg.failures > 0 ? EXIT_FAILURE : EXIT_SUCCESS;
+    return state.failures > 0 ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 
 static void init_sigchild_alert(void) {
@@ -472,14 +468,6 @@ static void init_sigchild_alert(void) {
     }
 }
 
-static void print_stats(void) {
-    const size_t passes = cfg.run_id - cfg.failures;
-    printf("-- %zu run%s, %zu pass%s, %zu failure%s\n",
-        cfg.run_id, cfg.run_id == 1 ? "" : "s",
-        passes, passes == 1 ? "" : "es",
-        cfg.failures, cfg.failures == 1 ? "" : "s");
-}
-
 static void init_sigint_handler(void) {
     struct sigaction sa = {
         .sa_handler = sigint_handler,
@@ -489,12 +477,29 @@ static void init_sigint_handler(void) {
     }
 }
 
+static void print_stats(void) {
+    const size_t passes = state.run_id - state.failures;
+    printf("-- %zu run%s, %zu pass%s, %zu failure%s\n",
+        state.run_id, state.run_id == 1 ? "" : "s",
+        passes, passes == 1 ? "" : "es",
+        state.failures, state.failures == 1 ? "" : "s");
+}
+
 int main(int argc, char **argv) {
     (void)argc;
     (void)argv;
+
+    struct config config = {
+        .max_failures = 1,
+        .max_runs = (size_t)-1,
+        .wait = 100,
+        .timeout = NO_TIMEOUT,
+    };
+    handle_args(&config, argc, argv);
+    cfg = &config;              /* After this point, cfg is const */
+
     init_sigchild_alert();
     init_sigint_handler();
 
-    handle_args(argc, argv);
     return mainloop();
 }
