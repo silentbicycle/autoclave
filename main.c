@@ -144,7 +144,8 @@ static int alert_rd_pipe;
  * supervisor process up immediately .*/
 static void sigchild_handler(int sig) {
     assert(sig == SIGCHLD);
-    for (int retries = 0; retries < 100; retries++) {
+#define RETRIES 100             /* arbitrary */
+    for (int retries = 0; retries < RETRIES; retries++) {
         /* POSIX.1-2004 requires calling write(2) in a
          * signal handler to be safe. */
         ssize_t res = write(alert_wr_pipe, "!", 1);
@@ -161,9 +162,27 @@ static void sigchild_handler(int sig) {
 }
 
 static int log_path(char *buf, size_t buf_size,
-        struct config *cfg, size_t id, const char *fdname) {
-    int res = snprintf(buf, buf_size, "%s.%zd.%s.log",
-        cfg->out_path, id, fdname);
+    struct config *cfg, size_t id, const char *fdname,
+    enum log_status status) {
+
+    char *status_suffix;
+    switch (status) {
+    case LOG_RUNNING:
+        status_suffix = "";
+        break;
+    case LOG_PASS:
+        status_suffix = "_pass";
+        break;
+    case LOG_FAIL:
+        status_suffix = "_FAIL";
+        break;
+    default:
+        fprintf(stderr, "(MATCH FAIL)\n");
+        assert(false);
+    }
+
+    int res = snprintf(buf, buf_size, "%s%s.%zd.%s.log",
+        cfg->out_path, status_suffix, id, fdname);
 
     if ((int)buf_size < res) {
         fprintf(stderr, "snprintf: path too long\n");
@@ -178,8 +197,11 @@ static bool try_exec(struct config *cfg, size_t id,
     char outlogbuf[PATH_MAX];
     int outlog = -1;
 
+    const char *tag_stdout = "stdout";
+    const char *tag_stderr = "stderr";
+
     if (cfg->log_stdout) {
-        log_path(outlogbuf, PATH_MAX, cfg, id, "stdout");
+        log_path(outlogbuf, PATH_MAX, cfg, id, tag_stdout, LOG_RUNNING);
         outlog = open(outlogbuf, O_WRONLY | O_TRUNC | O_CREAT, 0644);
         if (outlog == -1) { err(1, "open"); }
     }
@@ -187,7 +209,7 @@ static bool try_exec(struct config *cfg, size_t id,
     char errlogbuf[PATH_MAX];
     int errlog = -1;
     if (cfg->log_stderr) {
-        log_path(errlogbuf, PATH_MAX, cfg, id, "stderr");
+        log_path(errlogbuf, PATH_MAX, cfg, id, tag_stderr, LOG_RUNNING);
         errlog = open(errlogbuf, O_WRONLY | O_TRUNC | O_CREAT, 0644);
         if (errlog == -1) { err(1, "open"); }
     }
@@ -260,31 +282,50 @@ static bool try_exec(struct config *cfg, size_t id,
     }
 
     if (outlog != -1) {
-        close_log(outlog, failed);
-        rotate_log(cfg, "stdout", id);
+        close_log(outlog);
+        rename_log(cfg, tag_stdout, id, failed);
+        rotate_log(cfg, tag_stdout, id);
     }
     if (errlog != -1) {
-        close_log(errlog, failed);
-        rotate_log(cfg, "stderr", id);
+        close_log(errlog);
+        rename_log(cfg, tag_stderr, id, failed);
+        rotate_log(cfg, tag_stderr, id);
     }
     return failed;
 }
 
-static void close_log(int fd, bool failed) {
+static void close_log(int fd) {
     if (-1 == close(fd)) { err(1, "close"); }
-    (void)failed;               /* TODO: rename with _pass / _FAIL? */
 }
 
-static void rotate_log(struct config *cfg, const char *tag, size_t id) {
+static void rename_log(struct config *cfg, const char *tag,
+    size_t id, bool failed) {
+    char oldlogbuf[PATH_MAX];
+    char newlogbuf[PATH_MAX];
+    log_path(oldlogbuf, PATH_MAX, cfg, id, tag, LOG_RUNNING);
+    log_path(newlogbuf, PATH_MAX, cfg, id, tag,
+        failed ? LOG_FAIL : LOG_PASS);
+
+    errno = 0;
+    const int res = rename(oldlogbuf, newlogbuf);
+    if (res == -1) { err(1, "rename"); }
+}
+
+static void rotate_log(struct config *cfg, const char *tag,
+    size_t id) {
     if (cfg->rot.type == ROT_COUNT) {
-        size_t count = cfg->rot.u.count.count;
+        const size_t count = cfg->rot.u.count.count;
+        char oldlogbuf[PATH_MAX];
+        /* Only rotate logs from passing runs */
+        log_path(oldlogbuf, PATH_MAX, cfg, id - count, tag, LOG_PASS);
+
         if (id >= count) {
-            char oldlogbuf[PATH_MAX];
-            log_path(oldlogbuf, PATH_MAX, cfg, id - count, tag);
             int res = unlink(oldlogbuf);
             if (res == -1) {
                 if (errno == ENOENT) {
-                    errno = 0;  /* can't delete missing file. okay. */
+                    /* Couldn't find file -- may not exist, or may
+                     * be a failure, which should probably be kept. */
+                    errno = 0;
                 } else {
                     err(1, "unlink");
                 }

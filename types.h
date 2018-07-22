@@ -43,10 +43,17 @@ struct child_status {
     uint8_t stop_signal;
 };
 
+enum log_status {
+    LOG_RUNNING,
+    LOG_PASS,
+    LOG_FAIL,
+};
+
 static void handle_args(struct config *cfg, int argc, char **argv);
 static void sigchild_handler(int sig);
 static int log_path(char *buf, size_t buf_size,
-    struct config *cfg, size_t id, const char *fdname);
+    struct config *cfg, size_t id, const char *fdname,
+    enum log_status status);
 static bool try_exec(struct config *cfg, size_t id,
     struct child_status *status);
 static int supervise_process(struct config *cfg,
@@ -57,7 +64,11 @@ static void setenv_and_call_handler(struct config *cfg,
     char *stdout_log_path, char *stderr_log_path);
 static int mainloop(struct config *cfg);
 static void init_sigchild_alert(void);
-static void close_log(int fd, bool failed);
-static void rotate_log(struct config *cfg, const char *tag, size_t id);
+
+static void close_log(int fd);
+static void rename_log(struct config *cfg, const char *tag,
+    size_t id, bool failed);
+static void rotate_log(struct config *cfg, const char *tag,
+    size_t id);
 
 #endif
