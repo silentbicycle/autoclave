@@ -394,7 +394,7 @@ static int mainloop(config *cfg) {
         if (failures >= cfg->max_failures) { break; }
         run_id++;
         if (cfg->verbosity > 0) {
-            printf("%08lld.%08lld -- %zd run%s, %zd failure%s\n",
+            printf("%08lld.%06lld -- %zd run%s, %zd failure%s\n",
                 (long long)tv.tv_sec, (long long)tv.tv_usec,
                 run_id, run_id == 1 ? "" : "s",
                 failures, failures == 1 ? "" : "s");
