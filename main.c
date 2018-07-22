@@ -64,6 +64,7 @@ static void usage(const char *msg) {
         "    -h:         help\n"
         "    -c COUNT:   rotate log files by count\n"
         "    -f COUNT:   max failures (def. 1)\n"
+        "    -i STR:     replace STR in args with run_id\n"
         "    -l:         log stdout\n"
         "    -e:         log stderr\n"
         "    -o PATH:    log output path\n"
@@ -80,7 +81,7 @@ static void usage(const char *msg) {
 
 static void handle_args(struct config *cfg, int argc, char **argv) {
     int fl = 0;
-    while ((fl = getopt(argc, argv, "hc:ef:lo:r:st:vw:x:")) != -1) {
+    while ((fl = getopt(argc, argv, "hc:ef:i:lo:r:st:vw:x:")) != -1) {
         switch (fl) {
         case 'h':               /* help */
             usage(NULL);
@@ -94,6 +95,9 @@ static void handle_args(struct config *cfg, int argc, char **argv) {
             break;
         case 'f':               /* max failures */
             cfg->max_failures = (size_t)atoll(optarg);
+            break;
+        case 'i':               /* run_id string */
+            cfg->run_id_str = optarg;
             break;
         case 'l':               /* log stdout */
             cfg->log_stdout = true;
@@ -235,7 +239,19 @@ static bool try_exec(size_t id, struct child_status *status) {
             if (-1 == dup2(errlog, STDERR_FILENO)) { err(1, "dup2"); }
         }
         
-        /* TODO: could write id into argument if ARGV[n] is "%" */
+        /* If run_id_str is used (e.g. `-i %`) then replace every
+         * argument matching its string with the run_id */
+        char run_id_buf[16];
+        if (cfg->run_id_str != NULL) {
+            (void)snprintf(run_id_buf, sizeof(run_id_buf),
+                "%zu", state.run_id);
+            for (int i = 1; i < cfg->argc; i++) {
+                if (0 == strcmp(cfg->argv[i], cfg->run_id_str)) {
+                    cfg->argv[i] = run_id_buf;
+                }
+            }
+        }
+
         int res = execvp(cfg->argv[0], &cfg->argv[0]);
         if (res == -1) { err(1, "execvp"); }
     } else {                   /* parent */

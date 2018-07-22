@@ -28,6 +28,7 @@ struct config {
     int timeout;
     int verbosity;
     char *error_handler;
+    char *run_id_str;
 
     int argc;
     char **argv;
