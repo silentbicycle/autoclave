@@ -47,6 +47,7 @@ int main(int argc, char **argv) {
         void *value = NULL;
         res = pthread_join(threads[i], &value);
         (void)value;
+        (void)res;
     }
 
     return 0;
