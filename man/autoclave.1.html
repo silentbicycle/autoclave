@@ -73,8 +73,10 @@
   <h1>autoclave: a pressure cooker for programs</h1>
 <h2 id="SYNOPSIS">SYNOPSIS</h2>
 
-<p>autoclave [-h] [-c COUNT] [-l] [-e] [-f MAX_FAILURES] [-o OUT_PATH]
-    [-r MAX_RUNS] [-s] [-t TIMEOUT] [-v] [-w WAIT] [-x CMD] <var>command line</var></p>
+<p>autoclave [-h] [-c <var>count</var>] [-l] [-e] [-f <var>max_failures</var>]
+          [-i <var>id_str</var>] [-o <var>output_prefix</var>] [-r <var>max_runs</var>]
+          [-s] [-t <var>timeout_sec</var>] [-v] [-w <var>wait_msec</var>]
+          [-x <var>cmd</var>] <var>command line</var></p>
 
 <h2 id="DESCRIPTION">DESCRIPTION</h2>
 
@@ -85,38 +87,41 @@ user-specified timeout (-t) occurs, or a user-specified number of runs
 
 <p>It can log the contents of stdout (-l) and/or stderr (-e), and can
 rotate the log files so a fixed number of logs are kept (-c). If running
-in verbose (-v) mode, a timestamp and run/failure counts will be printed.
-(Supervise (-s) is an abbreviation for <code>-l -e -v</code>.)</p>
+in verbose (-v) mode, a timestamp and run/failure counts will be
+printed. (Supervise (-s) is an abbreviation for <code>-l -e -v</code>.) autoclave
+can also replace a string in the program's arguments with the current
+run ID (-i).</p>
 
-<p>On failure, a handler program (-x) can be called with informaiton about
-the child process. That way, a debugger can be opened if the stressed
-program times out or dumps core. This program must be in the path.</p>
+<p>On failure, a handler program (-x) can be called with information about
+the child process in environment variables. That way, a debugger can be
+opened if the stressed program times out or dumps core. This program
+must be in the path.</p>
 
 <h2 id="OPTIONS">OPTIONS</h2>
 
 <dl>
 <dt class="flush"><code>-h</code></dt><dd><p>Print a usage summary and exit.</p></dd>
-<dt><code>-c COUNT</code></dt><dd><p>If logging is used, only keep logs for the COUNT most recent runs.
+<dt><code>-c COUNT</code></dt><dd><p>If using logging, only keep logs for the COUNT most recent runs.
 (If both stdout and stderr are logged, there will be 2 * COUNT
 logs.) By default, log rotation is off.</p></dd>
 <dt class="flush"><code>-l</code></dt><dd><p>Log stdout. Defaults to false. Log output paths default to
 <code>PROG_PATH/PROG_NAME.RUN_ID.stdout.log</code>.</p></dd>
 <dt class="flush"><code>-e</code></dt><dd><p>Log stderr. Defaults to false.</p></dd>
 <dt><code>-f FAILURES</code></dt><dd><p>Run for multiple failures, rather than exiting after the first.</p></dd>
-<dt class="flush"><code>-o</code></dt><dd><p>Set the output path and base name for logs. Defaults to the first
-part of the command line given to autoclave.</p></dd>
-<dt><code>-r MAX_RUNS</code>:</dt><dd><p></p>
-
-<p>If MAX_RUNS executions of the command line complete without any failures,
+<dt><code>-i STRING</code></dt><dd><p>Anywhere STRING appears as a complete string in the command line,
+replace it with the current run ID.</p></dd>
+<dt class="flush"><code>-o</code></dt><dd><p>Set the output prefix for logs. Defaults to the first part of the
+command line given to autoclave (the process's <code>ARGV[0]</code>).</p></dd>
+<dt><code>-r MAX_RUNS</code></dt><dd><p>If MAX_RUNS executions of the command line complete without any failures,
 then terminate autoclave with a return value of <code>EXIT_SUCCESS</code>.</p></dd>
 <dt class="flush"><code>-s</code></dt><dd><p>Supervise - An abbreviation for <code>-l -e -v</code>, which are often used together.</p></dd>
-<dt><code>-t TIMEOUT</code></dt><dd><p>If any individual execution of the command line takes longer than
-TIMEOUT seconds to complete (perhaps due to a deadlock), consider it
-a failure. If an error handler is provided, call it, otherwise
-<span class="man-ref">kill<span class="s">(2)</span></span> the child process ID.</p></dd>
+<dt><code>-t SECONDS</code></dt><dd><p>If any individual execution of the command line takes longer than
+SECONDS to complete (perhaps due to a deadlock), consider it
+a failure. If an error handler is provided with <code>-x</code>, call it,
+otherwise <span class="man-ref">kill<span class="s">(2)</span></span> the child process ID.</p></dd>
 <dt class="flush"><code>-v</code></dt><dd><p>Increase verbosity.</p></dd>
-<dt><code>-w SECONDS</code></dt><dd><p>Wait SECONDS between executing the command line each time. Defaults
-to 1.</p></dd>
+<dt><code>-w MILLISECONDS</code></dt><dd><p>Wait MILLISECONDS between executing the command line each time.
+Defaults to 100.</p></dd>
 <dt class="flush"><code>-x CMD</code></dt><dd><p>If a failure occurs, run CMD. See ENVIRONMENT.</p></dd>
 </dl>
 
@@ -156,9 +161,10 @@ failures, or 1 otherwise.</p>
 <pre><code>$ autoclave -v buggy_program
 </code></pre>
 
-<p>Same, but if it succeeds 10 times, return EXIT_SUCCESS:</p>
+<p>Same, but if it succeeds 10 times, return EXIT_SUCCESS, and
+wait 500 milliseconds between runs:</p>
 
-<pre><code>$ autoclave -v -r 10 buggy_program
+<pre><code>$ autoclave -v -r 10 -w 500 buggy_program
 </code></pre>
 
 <p>Repeatedly run buggy_program, logging stdout to
@@ -180,6 +186,11 @@ failures, or 1 otherwise.</p>
 <p>Same, but log stderr as well as stdout (keeping 10 files):</p>
 
 <pre><code>$ autoclave -l -e -c 5 buggy_program
+</code></pre>
+
+<p>Repeatedly run buggy_program with the run ID as ARGV[2]:</p>
+
+<pre><code>$ autoclave -i % buggy_program --seed %
 </code></pre>
 
 <p>Repeatedly run buggy_program until it has failed 10 times:</p>
@@ -209,25 +220,25 @@ attach to the stopped process and investigate what is deadlocking.
 
 <p>All monitoring is based on the child process directly created by forking
 and execve-ing the command, so if the command is just a wrapper script
-for another program, the results will be incomplete.</p>
+for another program (and it forgets to use <code>exec</code>), the results may be
+incomplete.</p>
 
 <p>There may be race conditions in the child process error handling logic.</p>
 
-<p>If -f is used to track multiple failures in combination with -c, log
-rotation may delete older logs with information about failures.</p>
+<p>Log rotation does not delete failure logs.</p>
 
 <h2 id="COPYRIGHT">COPYRIGHT</h2>
 
-<p><code>autoclave</code> is Copyright (C) 2015 Scott Vokes <a href="&#x6d;&#x61;&#105;&#108;&#116;&#x6f;&#x3a;&#x76;&#111;&#107;&#101;&#x73;&#46;&#115;&#64;&#103;&#109;&#x61;&#x69;&#x6c;&#x2e;&#99;&#x6f;&#109;" data-bare-link="true">&#x76;&#111;&#x6b;&#x65;&#115;&#46;&#x73;&#x40;&#x67;&#109;&#x61;&#105;&#x6c;&#46;&#x63;&#x6f;&#x6d;</a>.</p>
+<p><code>autoclave</code> is Copyright (C) 2015-18 Scott Vokes <a href="&#x6d;&#x61;&#x69;&#x6c;&#x74;&#111;&#58;&#x76;&#x6f;&#107;&#x65;&#x73;&#x2e;&#x73;&#x40;&#x67;&#109;&#97;&#x69;&#x6c;&#46;&#x63;&#x6f;&#109;" data-bare-link="true">&#118;&#111;&#x6b;&#101;&#115;&#46;&#115;&#x40;&#x67;&#x6d;&#97;&#105;&#x6c;&#x2e;&#99;&#x6f;&#x6d;</a>.</p>
 
 <h2 id="SEE-ALSO">SEE ALSO</h2>
 
-<p><span class="man-ref">gdb<span class="s">(1)</span></span>, <span class="man-ref">core<span class="s">(5)</span></span></p>
+<p><span class="man-ref">gdb<span class="s">(1)</span></span>, <span class="man-ref">core<span class="s">(5)</span></span>, <a href="https://gitlab.com/akihe/radamsa">radamsa(1)</a></p>
 
 
   <ol class='man-decor man-foot man foot'>
     <li class='tl'></li>
-    <li class='tc'>March 2015</li>
+    <li class='tc'>July 2018</li>
     <li class='tr'>autoclave(1)</li>
   </ol>
 

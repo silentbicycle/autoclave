@@ -1,19 +1,19 @@
 .\" generated with Ronn/v0.7.3
 .\" http://github.com/rtomayko/ronn/tree/0.7.3
 .
-.TH "AUTOCLAVE" "1" "March 2015" "" ""
+.TH "AUTOCLAVE" "1" "July 2018" "" ""
 .
 .SH "SYNOPSIS"
-autoclave [\-h] [\-c COUNT] [\-l] [\-e] [\-f MAX_FAILURES] [\-o OUT_PATH] [\-r MAX_RUNS] [\-s] [\-t TIMEOUT] [\-v] [\-w WAIT] [\-x CMD] \fIcommand line\fR
+autoclave [\-h] [\-c \fIcount\fR] [\-l] [\-e] [\-f \fImax_failures\fR] [\-i \fIid_str\fR] [\-o \fIoutput_prefix\fR] [\-r \fImax_runs\fR] [\-s] [\-t \fItimeout_sec\fR] [\-v] [\-w \fIwait_msec\fR] [\-x \fIcmd\fR] \fIcommand line\fR
 .
 .SH "DESCRIPTION"
 autoclave repeatedly executes a command line until its process exits with a non\-zero status, is stopped/terminated by a signal, a user\-specified timeout (\-t) occurs, or a user\-specified number of runs (\-r) have passed without any failures\.
 .
 .P
-It can log the contents of stdout (\-l) and/or stderr (\-e), and can rotate the log files so a fixed number of logs are kept (\-c)\. If running in verbose (\-v) mode, a timestamp and run/failure counts will be printed\. (Supervise (\-s) is an abbreviation for \fB\-l \-e \-v\fR\.)
+It can log the contents of stdout (\-l) and/or stderr (\-e), and can rotate the log files so a fixed number of logs are kept (\-c)\. If running in verbose (\-v) mode, a timestamp and run/failure counts will be printed\. (Supervise (\-s) is an abbreviation for \fB\-l \-e \-v\fR\.) autoclave can also replace a string in the program\'s arguments with the current run ID (\-i)\.
 .
 .P
-On failure, a handler program (\-x) can be called with informaiton about the child process\. That way, a debugger can be opened if the stressed program times out or dumps core\. This program must be in the path\.
+On failure, a handler program (\-x) can be called with information about the child process in environment variables\. That way, a debugger can be opened if the stressed program times out or dumps core\. This program must be in the path\.
 .
 .SH "OPTIONS"
 .
@@ -23,7 +23,7 @@ Print a usage summary and exit\.
 .
 .TP
 \fB\-c COUNT\fR
-If logging is used, only keep logs for the COUNT most recent runs\. (If both stdout and stderr are logged, there will be 2 * COUNT logs\.) By default, log rotation is off\.
+If using logging, only keep logs for the COUNT most recent runs\. (If both stdout and stderr are logged, there will be 2 * COUNT logs\.) By default, log rotation is off\.
 .
 .TP
 \fB\-l\fR
@@ -38,13 +38,15 @@ Log stderr\. Defaults to false\.
 Run for multiple failures, rather than exiting after the first\.
 .
 .TP
-\fB\-o\fR
-Set the output path and base name for logs\. Defaults to the first part of the command line given to autoclave\.
+\fB\-i STRING\fR
+Anywhere STRING appears as a complete string in the command line, replace it with the current run ID\.
 .
 .TP
-\fB\-r MAX_RUNS\fR:
+\fB\-o\fR
+Set the output prefix for logs\. Defaults to the first part of the command line given to autoclave (the process\'s \fBARGV[0]\fR)\.
 .
-.IP
+.TP
+\fB\-r MAX_RUNS\fR
 If MAX_RUNS executions of the command line complete without any failures, then terminate autoclave with a return value of \fBEXIT_SUCCESS\fR\.
 .
 .TP
@@ -52,16 +54,16 @@ If MAX_RUNS executions of the command line complete without any failures, then t
 Supervise \- An abbreviation for \fB\-l \-e \-v\fR, which are often used together\.
 .
 .TP
-\fB\-t TIMEOUT\fR
-If any individual execution of the command line takes longer than TIMEOUT seconds to complete (perhaps due to a deadlock), consider it a failure\. If an error handler is provided, call it, otherwise kill(2) the child process ID\.
+\fB\-t SECONDS\fR
+If any individual execution of the command line takes longer than SECONDS to complete (perhaps due to a deadlock), consider it a failure\. If an error handler is provided with \fB\-x\fR, call it, otherwise kill(2) the child process ID\.
 .
 .TP
 \fB\-v\fR
 Increase verbosity\.
 .
 .TP
-\fB\-w SECONDS\fR
-Wait SECONDS between executing the command line each time\. Defaults to 1\.
+\fB\-w MILLISECONDS\fR
+Wait MILLISECONDS between executing the command line each time\. Defaults to 100\.
 .
 .TP
 \fB\-x CMD\fR
@@ -136,13 +138,13 @@ $ autoclave \-v buggy_program
 .IP "" 0
 .
 .P
-Same, but if it succeeds 10 times, return EXIT_SUCCESS:
+Same, but if it succeeds 10 times, return EXIT_SUCCESS, and wait 500 milliseconds between runs:
 .
 .IP "" 4
 .
 .nf
 
-$ autoclave \-v \-r 10 buggy_program
+$ autoclave \-v \-r 10 \-w 500 buggy_program
 .
 .fi
 .
@@ -201,6 +203,19 @@ $ autoclave \-l \-e \-c 5 buggy_program
 .IP "" 0
 .
 .P
+Repeatedly run buggy_program with the run ID as ARGV[2]:
+.
+.IP "" 4
+.
+.nf
+
+$ autoclave \-i % buggy_program \-\-seed %
+.
+.fi
+.
+.IP "" 0
+.
+.P
 Repeatedly run buggy_program until it has failed 10 times:
 .
 .IP "" 4
@@ -253,16 +268,16 @@ $ autoclave \-x examples/gdb_it examples/crash_example
 .IP "" 0
 .
 .SH "BUGS"
-All monitoring is based on the child process directly created by forking and execve\-ing the command, so if the command is just a wrapper script for another program, the results will be incomplete\.
+All monitoring is based on the child process directly created by forking and execve\-ing the command, so if the command is just a wrapper script for another program (and it forgets to use \fBexec\fR), the results may be incomplete\.
 .
 .P
 There may be race conditions in the child process error handling logic\.
 .
 .P
-If \-f is used to track multiple failures in combination with \-c, log rotation may delete older logs with information about failures\.
+Log rotation does not delete failure logs\.
 .
 .SH "COPYRIGHT"
-\fBautoclave\fR is Copyright (C) 2015 Scott Vokes \fIvokes\.s@gmail\.com\fR\.
+\fBautoclave\fR is Copyright (C) 2015\-18 Scott Vokes \fIvokes\.s@gmail\.com\fR\.
 .
 .SH "SEE ALSO"
-gdb(1), core(5)
+gdb(1), core(5), radamsa(1) \fIhttps://gitlab\.com/akihe/radamsa\fR
