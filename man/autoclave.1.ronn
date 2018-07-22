@@ -194,4 +194,4 @@ Log rotation does not delete failure logs.
 
 ## SEE ALSO
 
-gdb(1), core(5), radamsa(1)
+gdb(1), core(5), [radamsa(1)](https://gitlab.com/akihe/radamsa)
