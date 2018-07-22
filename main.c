@@ -57,17 +57,18 @@ static void usage(const char *msg) {
         AUTOCLAVE_VERSION_MAJOR, AUTOCLAVE_VERSION_MINOR,
         AUTOCLAVE_VERSION_PATCH, AUTOCLAVE_AUTHOR);
     fprintf(stderr,
-        "Usage: autoclave [-h] [-c COUNT] [-l] [-e] [-f MAX_FAILURES]\n"
-        "                 [-o OUT_PATH] [-r MAX_RUNS] [-s] [-t TIMEOUT]\n"
-        "                 [-v] [-w WAIT_MSEC] [-x CMD] <command line>\n"
+        "Usage: autoclave [-h] [-c <count>] [-l] [-e] [-f <max_failures>]\n"
+        "                 [-i <id_str>] [-o <output_prefix>] [-r <max_runs>]\n"
+        "                 [-s] [-t <timeout>] [-v] [-w <wait_msec>]\n"
+        "                 [-x <cmd>] <command line>\n"
         "\n"
-        "    -h:         help\n"
+        "    -h:         print this help\n"
         "    -c COUNT:   rotate log files by count\n"
         "    -f COUNT:   max failures (def. 1)\n"
         "    -i STR:     replace STR in args with run_id\n"
         "    -l:         log stdout\n"
         "    -e:         log stderr\n"
-        "    -o PATH:    log output path\n"
+        "    -o PATH:    log output prefix (default: program's $0)\n"
         "    -r COUNT:   max runs (def. no limit)\n"
         "    -t SEC:     timeout for watched program\n"
         "    -s:         supervise (abbreviation for `-l -e -v`)\n"
@@ -102,8 +103,8 @@ static void handle_args(struct config *cfg, int argc, char **argv) {
         case 'l':               /* log stdout */
             cfg->log_stdout = true;
             break;
-        case 'o':               /* out path */
-            cfg->out_path = optarg;
+        case 'o':               /* output prefix */
+            cfg->output_prefix = optarg;
             break;
         case 'r':               /* max runs */
             cfg->max_runs = (size_t)atoll(optarg);
@@ -137,8 +138,8 @@ static void handle_args(struct config *cfg, int argc, char **argv) {
     cfg->argv = argv + 1;
 
     if (cfg->argc < 1) { usage(NULL); }
-    if (cfg->out_path == NULL) {
-        cfg->out_path = cfg->argv[0];
+    if (cfg->output_prefix == NULL) {
+        cfg->output_prefix = cfg->argv[0];
     }
 }    
 
@@ -196,7 +197,7 @@ static int log_path(char *buf, size_t buf_size,
     }
 
     int res = snprintf(buf, buf_size, "%s%s.%zd.%s.log",
-        cfg->out_path, status_suffix, id, fdname);
+        cfg->output_prefix, status_suffix, id, fdname);
 
     if ((int)buf_size < res) {
         fprintf(stderr, "snprintf: path too long\n");

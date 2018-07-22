@@ -22,7 +22,7 @@ struct config {
     size_t max_runs;
     bool log_stdout;
     bool log_stderr;
-    char *out_path;
+    char *output_prefix;
     struct rotation rot;
     size_t wait;
     int timeout;
