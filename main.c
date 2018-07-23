@@ -58,9 +58,9 @@ static void usage(const char *msg) {
         AUTOCLAVE_VERSION_PATCH, AUTOCLAVE_AUTHOR);
     fprintf(stderr,
         "Usage: autoclave [-h] [-c <count>] [-l] [-e] [-f <max_failures>]\n"
-        "                 [-i <id_str>] [-o <output_prefix>] [-r <max_runs>]\n"
-        "                 [-s] [-t <timeout_sec>] [-v] [-w <wait_msec>]\n"
-        "                 [-x <cmd>] <command line>\n"
+        "                 [-i <id_str>] [-m <min_duration_msec>]\n"
+        "                 [-o <output_prefix>] [-r <max_runs>] [-s]\n"
+        "                 [-t <timeout_sec>] [-v] [-x <cmd>] <command line>\n"
         "\n"
         "    -h:         print this help\n"
         "    -c COUNT:   rotate log files by count\n"
@@ -68,12 +68,12 @@ static void usage(const char *msg) {
         "    -i STR:     replace STR in args with run_id\n"
         "    -l:         log stdout\n"
         "    -e:         log stderr\n"
+        "    -m MSEC:    min duration per run, will delay to pad (def. 50 msec)\n"
         "    -o PATH:    log output prefix (default: program's $0)\n"
         "    -r COUNT:   max runs (def. no limit)\n"
         "    -t SEC:     timeout for watched program (in seconds)\n"
         "    -s:         supervise (abbreviation for `-l -e -v`)\n"
         "    -v:         increase verbosity\n"
-        "    -w MSEC:    wait W msec between executions (def. 100)\n"
         "    -x CMD:     execute command on error/timeout\n"
         );
     
@@ -82,7 +82,7 @@ static void usage(const char *msg) {
 
 static void handle_args(struct config *cfg, int argc, char **argv) {
     int fl = 0;
-    while ((fl = getopt(argc, argv, "hc:ef:i:lo:r:st:vw:x:")) != -1) {
+    while ((fl = getopt(argc, argv, "hc:ef:i:lm:o:r:st:vx:")) != -1) {
         switch (fl) {
         case 'h':               /* help */
             usage(NULL);
@@ -103,6 +103,9 @@ static void handle_args(struct config *cfg, int argc, char **argv) {
         case 'l':               /* log stdout */
             cfg->log_stdout = true;
             break;
+        case 'm':               /* min_duration (in msec.) */
+            cfg->min_duration_msec = (size_t)strtoll(optarg, NULL, 10);
+            break;
         case 'o':               /* output prefix */
             cfg->output_prefix = optarg;
             break;
@@ -119,9 +122,6 @@ static void handle_args(struct config *cfg, int argc, char **argv) {
             break;
         case 'v':               /* verbosity */
             cfg->verbosity++;
-            break;
-        case 'w':               /* wait (in msec.) */
-            cfg->wait_msec = (size_t)strtoll(optarg, NULL, 10);
             break;
         case 'x':               /* execute error handler */
             cfg->error_handler = optarg;
@@ -448,23 +448,51 @@ static void setenv_and_call_handler(struct child_status *status,
     }
 }
 
+static void cur_time(struct timeval *tv) {
+    assert(tv != NULL);
+#if  _POSIX_C_SOURCE >= 199309L
+    struct timespec ts;
+    if (-1 == clock_gettime(CLOCK_MONOTONIC, &ts)) {
+        err(1, "clock_gettime");
+    }
+    tv->tv_sec = ts.tv_sec;
+    tv->tv_usec = ts.tv_nsec/1000; /* note: nsec -> usec */
+#else
+    if (-1 != gettimeofday(tv, NULL)) { err(1, "gettimeofday"); }
+#endif
+}
+
 static int mainloop(void) {
     while (state.run_id < cfg->max_runs) {
-        struct timeval tv;
-        if (0 != gettimeofday(&tv, NULL)) { err(1, "gettimeofday"); }
+        struct timeval pre, post;
         struct child_status s;
+        cur_time(&pre);
         bool failed = try_exec(state.run_id, &s);
+        cur_time(&post);
         if (failed) { state.failures++; }
         if (state.failures >= cfg->max_failures) { break; }
         state.run_id++;
+
+        const size_t duration_msec =
+          (post.tv_sec < pre.tv_sec || (post.tv_sec == pre.tv_sec
+                && post.tv_usec < pre.tv_usec))
+          ? 0         /* non-monotonic clock, negative time delta */
+          : (1000 * (post.tv_sec - pre.tv_sec)
+            + (post.tv_usec - pre.tv_usec)/1000);
+
         if (cfg->verbosity > 0) {
-            printf("%08lld.%06lld -- %zd run%s, %zd failure%s\n",
-                (long long)tv.tv_sec, (long long)tv.tv_usec,
+            printf("%08lld.%06lld -- %zd run%s, %zd failure%s, %zu msec\n",
+                (long long)post.tv_sec, (long long)post.tv_usec,
                 state.run_id, state.run_id == 1 ? "" : "s",
-                state.failures, state.failures == 1 ? "" : "s");
+                state.failures, state.failures == 1 ? "" : "s",
+                duration_msec);
         }
-        if (cfg->wait_msec > 0) {
-            poll(NULL, 0, (int)(cfg->wait_msec));
+
+        /* If the run did not take at least the minimum duration, then
+         * wait, to pad the overall run time to the minimum. */
+        if (duration_msec < cfg->min_duration_msec) {
+            const size_t rem = cfg->min_duration_msec - duration_msec;
+            poll(NULL, 0, (int)rem);
         }
     }
     print_stats();
@@ -509,7 +537,7 @@ int main(int argc, char **argv) {
     struct config config = {
         .max_failures = 1,
         .max_runs = (size_t)-1,
-        .wait_msec = 100,
+        .min_duration_msec = 50,
         .timeout_sec = NO_TIMEOUT,
     };
     handle_args(&config, argc, argv);

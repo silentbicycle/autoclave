@@ -36,6 +36,15 @@ Same, but if it succeeds 10 times, return EXIT_SUCCESS:
 
     $ autoclave -v -r 10 buggy_program
 
+Same, but ensure there is at least 500 mesc between runs,
+sleeping if necessary:
+
+    $ autoclave -v -r 10 -m 500 buggy_program
+
+Run without any delay:
+
+    $ autoclave -v -r 10 -m 0 buggy_program
+
 Repeatedly run buggy_program, logging stdout to
 `buggy_program.1.stdout.log`, `buggy_program.2.stdout.log`, and so on:
 

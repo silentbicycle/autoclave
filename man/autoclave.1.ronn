@@ -4,9 +4,9 @@ autoclave: a pressure cooker for programs
 ## SYNOPSIS
 
 autoclave [-h] [-c <count>] [-l] [-e] [-f <max_failures>]
-          [-i <id_str>] [-o <output_prefix>] [-r <max_runs>]
-          [-s] [-t <timeout_sec>] [-v] [-w <wait_msec>]
-          [-x <cmd>] <command line>
+          [-i <id_str>] [-m <min_duration_msec>]
+          [-o <output_prefix>] [-r <max_runs>] [-s]
+          [-t <timeout_sec>] [-v] [-x <cmd>] <command line>
 
 ## DESCRIPTION
 
@@ -52,6 +52,12 @@ must be in the path.
     Anywhere STRING appears as a complete string in the command line,
     replace it with the current run ID.
 
+  * `-m MILLISECONDS`:
+    Ensure that at least MILLISECONDS have passed between runs.
+    If the run finishes before this time is up, autoclave will sleep
+    for the remaining time, to prevent very short-lived programs from
+    unexpectedly spinning in a tight loop. Defaults to 50 msec.
+
   * `-o`:
     Set the output prefix for logs. Defaults to the first part of the
     command line given to autoclave (the process's `ARGV[0]`).
@@ -71,10 +77,6 @@ must be in the path.
 
   * `-v`:
     Increase verbosity.
-
-  * `-w MILLISECONDS`:
-    Wait MILLISECONDS between executing the command line each time.
-    Defaults to 100.
 
   * `-x CMD`:
     If a failure occurs, run CMD. See ENVIRONMENT.
@@ -129,10 +131,18 @@ Same, but print run and failure counts:
 
     $ autoclave -v buggy_program
 
-Same, but if it succeeds 10 times, return EXIT_SUCCESS, and
-wait 500 milliseconds between runs:
+Same, but if it succeeds 10 times, return EXIT_SUCCESS:
 
-    $ autoclave -v -r 10 -w 500 buggy_program
+    $ autoclave -v -r 10 buggy_program
+
+Same, but ensure there is at least 500 mesc between runs,
+sleeping if necessary:
+
+    $ autoclave -v -r 10 -m 500 buggy_program
+
+Run without any delay:
+
+    $ autoclave -v -r 10 -m 0 buggy_program
 
 Repeatedly run buggy_program, logging stdout to
 `buggy_program.1.stdout.log`, `buggy_program.2.stdout.log`, and so on:
