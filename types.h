@@ -40,6 +40,7 @@ struct config {
 };
 
 struct state {
+    struct timeval start_time;
     size_t run_id;
     size_t failures;
 };

@@ -458,7 +458,18 @@ static void cur_time(struct timeval *tv) {
 #endif
 }
 
+static double calc_duration(const struct timeval *pre,
+    const struct timeval *post) {
+    return (post->tv_sec < pre->tv_sec || (post->tv_sec == pre->tv_sec
+            && post->tv_usec < pre->tv_usec))
+      ? 0      /* non-monotonic clock, ignore negative time delta */
+      : (1000.0 * (post->tv_sec - pre->tv_sec)
+          + (post->tv_usec - pre->tv_usec)/1000.0);
+}
+
 static int mainloop(void) {
+    cur_time(&state.start_time);
+
     while (state.run_id < cfg->max_runs) {
         struct timeval pre, post;
         struct child_status s;
@@ -469,15 +480,10 @@ static int mainloop(void) {
         if (state.failures >= cfg->max_failures) { break; }
         state.run_id++;
 
-        const size_t duration_msec =
-          (post.tv_sec < pre.tv_sec || (post.tv_sec == pre.tv_sec
-                && post.tv_usec < pre.tv_usec))
-          ? 0         /* non-monotonic clock, negative time delta */
-          : (1000 * (post.tv_sec - pre.tv_sec)
-            + (post.tv_usec - pre.tv_usec)/1000);
+        const double duration_msec = calc_duration(&pre, &post);
 
         if (cfg->verbosity > 0) {
-            printf("%08lld.%06lld -- %zd run%s, %zd failure%s, %zu msec\n",
+            printf("%08lld.%06lld -- %zd run%s, %zd failure%s, %g msec\n",
                 (long long)post.tv_sec, (long long)post.tv_usec,
                 state.run_id, state.run_id == 1 ? "" : "s",
                 state.failures, state.failures == 1 ? "" : "s",
@@ -520,10 +526,15 @@ static void init_sigint_handler(void) {
 
 static void print_stats(void) {
     const size_t passes = state.run_id - state.failures;
-    printf("-- %zu run%s, %zu pass%s, %zu failure%s\n",
+    struct timeval post;
+    cur_time(&post);
+    double duration = calc_duration(&state.start_time, &post);
+
+    printf("-- %zu run%s, %zu pass%s, %zu failure%s, %g msec\n",
         state.run_id, state.run_id == 1 ? "" : "s",
         passes, passes == 1 ? "" : "es",
-        state.failures, state.failures == 1 ? "" : "s");
+        state.failures, state.failures == 1 ? "" : "s",
+        duration);
 }
 
 int main(int argc, char **argv) {
