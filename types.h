@@ -1,6 +1,11 @@
 #ifndef TYPES_H
 #define TYPES_H
 
+#include <stdlib.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <sys/time.h>
+
 enum rot_t {
     ROT_NONE,
     ROT_COUNT,

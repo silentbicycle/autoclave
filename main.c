@@ -14,12 +14,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <stdio.h>
-#include <stdint.h>
-#include <stdbool.h>
 #include <signal.h>
 #include <assert.h>
 #include <err.h>
@@ -29,7 +26,6 @@
 #include <limits.h>
 #include <poll.h>
 #include <time.h>
-#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 
