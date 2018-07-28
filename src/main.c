@@ -16,6 +16,7 @@
 
 #include <unistd.h>
 #include <string.h>
+#include <strings.h>
 #include <stdio.h>
 #include <assert.h>
 #include <err.h>
@@ -51,6 +52,18 @@ static const struct config * cfg;
 
 static struct state state;
 
+/* There apparently isn't a POSIX-standard portable way to
+ * do this, so just list the standard signals users are
+ * likely to care about. In the worst case, a numeric
+ * signal ID can still be used. */
+struct { int id; const char *name; } signal_table[] = {
+#define S(X) { SIG##X, #X }
+    S(HUP), S(INT), S(QUIT), S(ILL), S(ABRT), S(FPE), S(KILL),
+    S(SEGV), S(PIPE), S(ALRM), S(TERM), S(USR1), S(USR2), S(CHLD),
+    S(CONT), S(STOP), S(TSTP), S(TTIN), S(TTOU),
+#undef S
+};
+
 static void usage(const char *msg) {
     if (msg) { fprintf(stderr, "%s\n\n", msg); }
     fprintf(stderr, "autoclave v. %d.%d.%d by %s\n",
@@ -68,7 +81,7 @@ static void usage(const char *msg) {
         "    -f COUNT:   max failures (def. 1)\n"
         "    -i STR:     replace STR in args with run_id\n"
         "    -I INTS:    non-zero exit values to ignore (comma-separated list)\n"
-        "    -k INT:     signal to send process on timeout\n"
+        "    -k SIGNAL:  signal to send process on timeout (int or name)\n"
         "    -l:         log stdout\n"
         "    -e:         log stderr\n"
         "    -m MSEC:    min duration per run, will delay to pad (def. 50 msec)\n"
@@ -89,7 +102,17 @@ static int signal_id_from_str(const char *name) {
         if (res <= 0 || res > SIGRTMAX) { return -1; }
         return res;
     }
-    /* Name-based lookup is not currently supported. */
+
+    /* Compare the signal string against a table of known signals. */
+    const size_t limit = sizeof(signal_table)/sizeof(signal_table[0]);
+    if (0 == strncasecmp(name, "sig", 3)) { name = &name[3]; }
+    for (size_t i = 0; i < limit; i++) {
+        if (0 == strcasecmp(signal_table[i].name, name)) {
+            return signal_table[i].id;
+        }
+    }
+
+    fprintf(stderr, "Unrecognized signal name: %s (try int instead)\n", name);
     return -1;
 }
 

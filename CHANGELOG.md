@@ -14,7 +14,7 @@ autoclave can delay to pad run time for very short-lived programs,
 but will not slow things down otherwise. (Thanks to Josh Triplett
 for the suggestion.)
 
-Added `-k <int>` to send a custom signal on timeout, rather than
+Added `-k <int or name>` to send a custom signal on timeout, rather than
 `SIGINT`. Also, the default signal was changed to `SIGTERM`.
 
 `run_id` now starts counting at 1 rather than 0.
