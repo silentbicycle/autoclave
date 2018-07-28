@@ -69,6 +69,7 @@ information, or send a notification.
     run terminates before this time is up, autoclave will sleep for the
     remaining time, to prevent very short-lived programs from
     unexpectedly spinning in a tight loop. Defaults to 50 msec.
+    Use `-m 0` to run the program as fast as possible, without delays.
 
   * `-o STRING`:
     Set the output prefix for log files. For more information about
