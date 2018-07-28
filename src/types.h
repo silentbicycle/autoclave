@@ -11,8 +11,6 @@ enum rot_t {
     ROT_COUNT,
 };
 
-#define NO_TIMEOUT (-1)
-
 struct rotation {
     enum rot_t type;
     union {
@@ -21,6 +19,12 @@ struct rotation {
         } count;
     } u;
 };
+
+/* Defaults */
+#define DEF_MAX_FAILURES 1
+#define DEF_MIN_DURATION_MSEC 50
+#define NO_TIMEOUT (-1)
+#define NO_LIMIT ((size_t)(-1))
 
 struct config {
     size_t max_failures;

@@ -577,9 +577,9 @@ int main(int argc, char **argv) {
     arg_max_size = sysconf(_SC_ARG_MAX);
 
     struct config config = {
-        .max_failures = 1,
-        .max_runs = (size_t)-1,
-        .min_duration_msec = 50,
+        .max_failures = DEF_MAX_FAILURES,
+        .max_runs = NO_LIMIT,
+        .min_duration_msec = DEF_MIN_DURATION_MSEC,
         .timeout_sec = NO_TIMEOUT,
     };
     handle_args(&config, argc, argv);
