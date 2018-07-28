@@ -45,8 +45,7 @@ static const char REASON_EXIT[] = "exit";
 static const char REASON_TERM[] = "term";
 static const char REASON_STOP[] = "stop";
 
-static long arg_max_size;
-static char *output_prefix_buf;
+static char output_prefix_buf[PATH_MAX];
 
 static const struct config * cfg;
 
@@ -117,9 +116,10 @@ static int signal_id_from_str(const char *name) {
 }
 
 static bool set_ignored_exits(struct config *cfg, char *arg) {
-    char arg_cp[arg_max_size + 1];
-    memset(arg_cp, 0x00, arg_max_size + 1);
-    strncpy(arg_cp, arg, arg_max_size);
+    const size_t cp_len = strlen(arg);
+    char arg_cp[cp_len + 1];
+    memset(arg_cp, 0x00, cp_len + 1);
+    strncpy(arg_cp, arg, cp_len);
 
     char *list = arg_cp;
     for (;;) {
@@ -215,22 +215,21 @@ static void handle_args(struct config *cfg, int argc, char **argv) {
     if (cfg->log_stdout || cfg->log_stderr) {
         if (cfg->output_prefix == NULL) {
             /* Construct a default prefix for the logs. */
-            char argv_cp[arg_max_size + 1];
-            memset(argv_cp, 0x00, arg_max_size + 1);
-            strncpy(argv_cp, cfg->argv[0], arg_max_size);
+            const size_t cp_len = strlen(cfg->argv[0]);
+            char argv_cp[cp_len + 1];
+            memset(argv_cp, 0x00, cp_len + 1);
+            strncpy(argv_cp, cfg->argv[0], cp_len);
 
-            output_prefix_buf = calloc(1, arg_max_size);
-            if (output_prefix_buf == NULL) { err(1, "calloc"); }
-            (void)snprintf(output_prefix_buf, arg_max_size,
+            (void)snprintf(output_prefix_buf, sizeof(output_prefix_buf),
                 "autoclave.%s", basename(argv_cp));
             cfg->output_prefix = output_prefix_buf;
         } else {
             /* If output prefix contain a sub-directories, then attempt
              * to create it, if not already present. */
-            char prefix_cp[arg_max_size + 1];
-            memset(prefix_cp, 0x00, arg_max_size + 1);
-
-            strncpy(prefix_cp, cfg->output_prefix, arg_max_size);
+            const size_t cp_len = strlen(cfg->output_prefix);
+            char prefix_cp[cp_len + 1];
+            memset(prefix_cp, 0x00, cp_len + 1);
+            strncpy(prefix_cp, cfg->output_prefix, cp_len);
             char *dir = dirname(prefix_cp);
             if (-1 == mkdir(dir, 0700)) {
                 if (errno == EEXIST) {
@@ -273,7 +272,6 @@ static void sigchild_handler(int sig) {
 static void sigint_handler(int sig) {
     assert(sig == SIGINT);
     print_stats();
-    free(output_prefix_buf);
     exit(state.failures > 0 ? EXIT_FAILURE : EXIT_SUCCESS);
 }
 
@@ -649,8 +647,6 @@ int main(int argc, char **argv) {
     (void)argc;
     (void)argv;
 
-    arg_max_size = sysconf(_SC_ARG_MAX);
-
     struct config config = {
         .max_failures = DEF_MAX_FAILURES,
         .max_runs = NO_LIMIT,
@@ -665,5 +661,7 @@ int main(int argc, char **argv) {
     init_sigchild_alert();
     init_sigint_handler();
 
-    return mainloop();
+    int res = mainloop();
+    cfg = NULL;
+    return res;
 }
