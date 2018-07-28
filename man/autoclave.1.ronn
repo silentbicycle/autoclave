@@ -4,28 +4,30 @@ autoclave: a pressure cooker for programs
 ## SYNOPSIS
 
 autoclave [-h] [-c <count>] [-l] [-e] [-f <max_failures>]
-          [-i <id_str>] [-m <min_duration_msec>]
+          [-i <id_str>] [-k <signal>] [-m <min_duration_msec>]
           [-o <output_prefix>] [-r <max_runs>] [-s]
           [-t <timeout_sec>] [-v] [-x <cmd>] <command line>
+
 
 ## DESCRIPTION
 
 autoclave repeatedly executes a command line until its process exits
 with a non-zero status, is stopped/terminated by a signal, a
 user-specified timeout (-t) occurs, or a user-specified number of runs
-(-r) have passed without any failures.
+(-r) have passed without failures.
 
 It can log the contents of stdout (-l) and/or stderr (-e), and can
-rotate the log files so a fixed number of logs are kept (-c). If running
-in verbose (-v) mode, a timestamp and run/failure counts will be
-printed. (Supervise (-s) is an abbreviation for `-l -e -v`.) autoclave
-can also replace a string in the program's arguments with the current
-run ID (-i).
+rotate the log files so a fixed number of logs are kept (-c). For more
+information about logging, see LOGGING below.
 
-On failure, a handler program (-x) can be called with information about
-the child process in environment variables. That way, a debugger can be
-opened if the stressed program times out or dumps core. This program
-must be in the path.
+If running in verbose (-v) mode, a timestamp, duration, and run/failure
+counts will be printed after each run. Overall stats will be printed
+on exit.
+
+On failure / timeout, autoclave can run a handler program (-x) with
+information about the child process in environment variables. This could
+be used to attach a debugger to the supervised program, gather extra
+information, or send a notification.
 
 
 ## OPTIONS
@@ -34,58 +36,95 @@ must be in the path.
     Print a usage summary and exit.
 
   * `-c COUNT`:
-    If using logging, only keep logs for the COUNT most recent runs.
-    (If both stdout and stderr are logged, there will be 2 * COUNT
-    logs.) By default, log rotation is off.
+    If using logging, only keep logs for the COUNT most recent passing
+    runs. By default, log rotation is disabled.
+    Note: when both stdout and stderr are logged, there will be
+    twice as many logs.
+
+  * `-k INT`:
+    Send the supervised program signal INT on timeout.
+    Defaults to SIGTERM.
 
   * `-l`:
-    Log stdout. Defaults to false. Log output paths default to
-    `PROG_PATH/PROG_NAME.RUN_ID.stdout.log`.
+    Log stdout. Defaults to false.
 
   * `-e`:
     Log stderr. Defaults to false.
 
   * `-f FAILURES`:
-    Run for multiple failures, rather than exiting after the first.
+    If the supervised program has failed FAILURES times, exit
+    with `EXIT_FAILURE`. Defaults to 1.
 
   * `-i STRING`:
     Anywhere STRING appears as a complete string in the command line,
     replace it with the current run ID.
 
   * `-m MILLISECONDS`:
-    Ensure that at least MILLISECONDS have passed between runs.
-    If the run finishes before this time is up, autoclave will sleep
-    for the remaining time, to prevent very short-lived programs from
+    Ensure that at least MILLISECONDS have passed between runs. If the
+    run terminates before this time is up, autoclave will sleep for the
+    remaining time, to prevent very short-lived programs from
     unexpectedly spinning in a tight loop. Defaults to 50 msec.
 
-  * `-o`:
-    Set the output prefix for logs. Defaults to the first part of the
-    command line given to autoclave (the process's `ARGV[0]`).
+  * `-o STRING`:
+    Set the output prefix for log files. For more information about
+    logging paths, see LOGGING below.
 
   * `-r MAX_RUNS`:
     If MAX_RUNS executions of the command line complete without any failures,
     then terminate autoclave with a return value of `EXIT_SUCCESS`.
 
   * `-s`:
-    Supervise - An abbreviation for `-l -e -v`, which are often used together.
+    Supervise - An abbreviation for `-l -e -v`.
 
   * `-t SECONDS`:
-    If any individual execution of the command line takes longer than
-    SECONDS to complete (perhaps due to a deadlock), consider it
-    a failure. If an error handler is provided with `-x`, call it,
-    otherwise kill(2) the child process ID.
+    If any individual run of the program takes longer than SECONDS to
+    complete (perhaps due to a deadlock), consider it a failure. If an
+    error handler is provided with `-x`, call it, otherwise kill(2) the
+    child process ID.
 
   * `-v`:
     Increase verbosity.
 
   * `-x CMD`:
-    If a failure occurs, run CMD. See ENVIRONMENT.
+    If a failure occurs, run a failure handler CMD (using `system(3)`).
+    For details about failure handler usage, see ENVIRONMENT.
+
+
+## LOGGING
+
+autoclave can log the stdout and/or stderr of each run to a file,
+and can rotate logs so only logs from the last N passing runs are
+kept.
+
+By default, the log files are saved as
+`autoclave.$NAME.$STATUS.$RUN_ID.$STREAM.log`, where `$NAME` is the
+`basename` for the supervised process's `ARGV[0]` (typically, the
+program name), `$STATUS` is "pass" or "FAIL", `$RUN_ID` is the ID for
+the current run (counting up from 1), and `$STREAM` is either "stdout"
+or "stderr".
+
+For example, the stderr output from the 15th run of `/bin/true`,
+if passing, would be stored in `autoclave.true.pass.15.stderr.log`.
+
+The `-o` (output prefix) option can be used to change the portion before
+`$STATUS`. For example, running:
+
+    $ autoclave -o tmp/output -l -e /bin/true
+
+would instead save it to `tmp/output.true.pass.15.stderr.log`.
+
+If the prefix includes a subdirectory name, autoclave will attempt to
+create it. Creating multiple nested directories, such as
+`tmp/log/output`, is not supported.
 
 
 ## ENVIRONMENT
 
 The failure handler will be called with the following environment
 variables defined:
+
+  * `AUTOCLAVE_CMD`:
+    The command used to start the supervised process. (Its `ARGV[0]`.)
 
   * `AUTOCLAVE_CHILD_PID`:
     The process ID of the child process.
@@ -97,46 +136,58 @@ variables defined:
     The general failure cause: "timeout", "exit", "term", "stop".
 
   * `AUTOCLAVE_DUMPED_CORE`:
-    Whether the child process dumped core. "1" or "0".
+    Whether the child process dumped core, 1 or 0.
+    On systems where `WCOREDUMP` is unsupported, this is always 0.
 
   * `AUTOCLAVE_EXIT_STATUS`:
-    The exit status of the child process, if it exited.
+    The exit status of the child process, if it exited, otherwise 0.
 
   * `AUTOCLAVE_TERM_SIGNAL`:
-    The signal that terminated the child process, if any.
+    The signal that terminated the child process, if it was terminated
+    by a signal, otherwise 0.
 
   * `AUTOCLAVE_STOP_SIGNAL`:
-    The signal that caused the child process to stop, if any.
+    The signal that caused the child process to stop, if any,
+    otherwise 0.
 
   * `AUTOCLAVE_STDOUT_LOG`:
-    The current stdout log file, if any.
+    The current stdout log file, if any. Note that after the process
+    completes, this log and the stderr logs will be renamed to include
+    "pass" or "FAIL".
 
   * `AUTOCLAVE_STDERR_LOG`:
     The current stderr log file, if any.
 
+Note that in order for the failure handler to attach gdb to a process,
+autoclave may need to be run with privilege escalation such as sudo or
+doas.
+
+autoclave does not attempt to halt the process after the failure handler
+has exited.
+
 
 ## EXIT STATUS
 
-Returns 0 if the maximum number of runs (-r) executed without any
-failures, or 1 otherwise.
+Returns 0 if the maximum number of runs (`-r`) executed without any
+failures, or 1 otherwise. If there is no maximum number of runs set,
+autoclave will run until terminated.
 
 
 ## EXAMPLES
 
-Repeatedly run buggy_program until it crashes:
+Repeatedly run buggy_program until it fails:
 
     $ autoclave buggy_program
 
-Same, but print run and failure counts:
+Print run and failure counts and timing info:
 
     $ autoclave -v buggy_program
 
-Same, but if it succeeds 10 times, return EXIT_SUCCESS:
+If it succeeds 10 times, exit with EXIT_SUCCESS:
 
     $ autoclave -v -r 10 buggy_program
 
-Same, but ensure there is at least 500 mesc between runs,
-sleeping if necessary:
+Ensure there is at least 500 mesc between runs, sleeping if necessary:
 
     $ autoclave -v -r 10 -m 500 buggy_program
 
@@ -145,23 +196,33 @@ Run without any delay:
     $ autoclave -v -r 10 -m 0 buggy_program
 
 Repeatedly run buggy_program, logging stdout to
-`buggy_program.1.stdout.log`, `buggy_program.2.stdout.log`, and so on:
+`autoclave.buggy_program.pass.1.stdout.log`,
+`autoclave.buggy_program.FAIL.2.stdout.log`, and so on:
 
     $ autoclave -l buggy_program
 
-Same, but log to `/tmp/buggy.ID.stdout.log` instead:
+Log to `/tmp/buggy.STATUS.ID.stdout.log` instead:
 
     $ autoclave -l -o /tmp/buggy buggy_program
 
-Log, but only keep the 5 most recent log files:
+Log, but only keep logs from the 5 most recent passing runs:
 
     $ autoclave -l -c 5 buggy_program
 
-Same, but log stderr as well as stdout (keeping 10 files):
+Log stderr as well as stdout (keeping 10 files):
 
     $ autoclave -l -e -c 5 buggy_program
 
-Repeatedly run buggy_program with the run ID as ARGV[2]:
+Repeatedly run buggy_program, printing run and failure counts
+and timing info, and logging stdout and stderr:
+
+    $ autoclave -l -e -v buggy_program
+
+Alias for the previous use:
+
+    $ autoclave -s buggy_program
+
+Repeatedly run buggy_program with the run ID as its ARGV[2]:
 
     $ autoclave -i % buggy_program --seed %
 
@@ -169,20 +230,25 @@ Repeatedly run buggy_program until it has failed 10 times:
 
     $ autoclave -f 10 buggy_program
 
-Run a program that occasionally deadlocks, halting it and counting it as a
-failure if it takes more than 10 seconds to complete:
+Run a program that occasionally deadlocks, halting it and counting it as
+a failure if it takes more than 10 seconds to complete:
 
-    $ autoclave -t 10  examples/deadlock_example
+    $ autoclave -t 10 build/deadlock_example
 
-Same, but run the script `examples/gdb_it` when it times out, so gdb can
-attach to the stopped process and investigate what is deadlocking.
-(Note: the process is not halted after the -x command returns.)
+Attach gdb to the child process when the process times out, to
+investigate what is deadlocking:
 
-    $ autoclave -t 10 -x examples/gdb_it examples/deadlock_example
+    $ autoclave -t 10 -x 'sudo gdb --pid=$AUTOCLAVE_CHILD_PID' build/deadlock_example
 
-Run `examples/crash_example`, calling `examples/gdb_it` if it fails:
+Use a failure handler script, `examples/gdb_it`, rather than running
+gdb directly:
 
-    $ autoclave -x examples/gdb_it examples/crash_example
+    $ autoclave -t 10 -x examples/gdb_it build/deadlock_example
+
+Run `build/crash_example`, calling `examples/gdb_it` if it fails.
+This will load a core dump, if available:
+
+    $ autoclave -x examples/gdb_it build/crash_example
 
 
 ## BUGS
@@ -194,7 +260,8 @@ incomplete.
 
 There may be race conditions in the child process error handling logic.
 
-Log rotation does not delete failure logs.
+Log rotation does not delete failure logs. This is probably the right
+default, but there isn't a way to configure it yet.
 
 
 ## COPYRIGHT
