@@ -224,8 +224,8 @@ static void handle_args(struct config *cfg, int argc, char **argv) {
                 "autoclave.%s", basename(argv_cp));
             cfg->output_prefix = output_prefix_buf;
         } else {
-            /* If output prefix contain a sub-directories, then attempt
-             * to create it, if not already present. */
+            /* If output prefix contain any sub-directories, then
+             * attempt to create it, if not already present. */
             const size_t cp_len = strlen(cfg->output_prefix);
             char prefix_cp[cp_len + 1];
             memset(prefix_cp, 0x00, cp_len + 1);
