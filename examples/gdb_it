@@ -15,17 +15,17 @@ echo -- stdout log: ${AUTOCLAVE_STDOUT_LOG}
 echo -- stderr log: ${AUTOCLAVE_STDERR_LOG}
 
 if [ "timeout" = ${AUTOCLAVE_FAIL_TYPE} ]; then
-    gdb --pid=${AUTOCLAVE_CHILD_PID} ${AUTOCLAVE_CMD}
+    exec gdb --pid=${AUTOCLAVE_CHILD_PID} ${AUTOCLAVE_CMD}
 elif [ "1" = ${AUTOCLAVE_DUMPED_CORE} ]; then
     if [ "Linux" = $(uname) ]; then
         # default Linux-style: "core"
-        gdb --core=core ${AUTOCLAVE_CMD}
+        exec gdb --core=core ${AUTOCLAVE_CMD}
     elif [ "OpenBSD" = $(uname) ]; then
         # OpenBSD-style: "CMD.core"
-        gdb --core=${AUTOCLAVE_CMD}.core ${AUTOCLAVE_CMD}
+        exec gdb --core=${AUTOCLAVE_CMD}.core ${AUTOCLAVE_CMD}
     elif [ "Darwin" = $(uname) ]; then
         # OSX-style: "/cores/core.PID"
-        gdb --core=/cores/core.${AUTOCLAVE_CHILD_PID} ${AUTOCLAVE_CMD}
+        exec gdb --core=/cores/core.${AUTOCLAVE_CHILD_PID} ${AUTOCLAVE_CMD}
     else
         echo Edit script to specify how core dumps are named on this OS
     fi
