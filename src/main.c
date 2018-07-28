@@ -58,14 +58,16 @@ static void usage(const char *msg) {
         AUTOCLAVE_VERSION_PATCH, AUTOCLAVE_AUTHOR);
     fprintf(stderr,
         "Usage: autoclave [-h] [-c <count>] [-l] [-e] [-f <max_failures>]\n"
-        "                 [-i <id_str>] [-k <signal>] [-m <min_duration_msec>]\n"
-        "                 [-o <output_prefix>] [-r <max_runs>] [-s]\n"
-        "                 [-t <timeout_sec>] [-v] [-x <cmd>] <command line>\n"
+        "                 [-i <id_str>] [-I <exits>] [-k <signal>]\n"
+        "                 [-m <min_duration_msec>] [-o <output_prefix>]\n"
+        "                 [-r <max_runs>] [-s] [-t <timeout_sec>] [-v]\n"
+        "                 [-x <cmd>] <command line>\n"
         "\n"
         "    -h:         print this help\n"
         "    -c COUNT:   rotate log files by count\n"
         "    -f COUNT:   max failures (def. 1)\n"
         "    -i STR:     replace STR in args with run_id\n"
+        "    -I INTS:    non-zero exit values to ignore (comma-separated list)\n"
         "    -k INT:     signal to send process on timeout\n"
         "    -l:         log stdout\n"
         "    -e:         log stderr\n"
@@ -91,9 +93,33 @@ static int signal_id_from_str(const char *name) {
     return -1;
 }
 
+static bool set_ignored_exits(struct config *cfg, char *arg) {
+    char arg_cp[arg_max_size + 1];
+    memset(arg_cp, 0x00, arg_max_size + 1);
+    strncpy(arg_cp, arg, arg_max_size);
+
+    char *list = arg_cp;
+    for (;;) {
+        char *t = strtok(list, ",");
+        list = NULL;
+        if (t == NULL) { break; }
+        if (!isdigit(t[0])) { return false; }
+
+        unsigned long num = (unsigned long)strtol(t, NULL, 10);
+
+        // Reject any exit status values above what `exit(3)` accepts.
+        if (errno == ERANGE || num > 0377) { return false; }
+
+        // Set flag bit for ignored exit.
+        cfg->ignored_exits[num / 64] |= (1LLU << (num % 64));
+    }
+
+    return true;
+}
+
 static void handle_args(struct config *cfg, int argc, char **argv) {
     int fl = 0;
-    while ((fl = getopt(argc, argv, "hc:ef:i:k:lm:o:r:st:vx:")) != -1) {
+    while ((fl = getopt(argc, argv, "hc:ef:I:i:k:lm:o:r:st:vx:")) != -1) {
         switch (fl) {
         case 'h':               /* help */
             usage(NULL);
@@ -110,6 +136,12 @@ static void handle_args(struct config *cfg, int argc, char **argv) {
             break;
         case 'i':               /* run_id string */
             cfg->run_id_str = optarg;
+            break;
+        case 'I':               /* ignored exits */
+            if (!set_ignored_exits(cfg, optarg)) {
+                fprintf(stderr, "Invalid exits: %s\n", optarg);
+                usage(NULL);
+            }
             break;
         case 'k':               /* timeout kill signal */
             cfg->timeout_kill_signal = signal_id_from_str(optarg);
@@ -317,7 +349,10 @@ static bool try_exec(size_t id, struct child_status *status) {
         } else if (WIFEXITED(stat_loc)) {
             status->reason = REASON_EXIT;
             status->exit_status = WEXITSTATUS(stat_loc);
-            failed = (status->exit_status != EXIT_SUCCESS);
+
+            /* Set failed if the exit_status isn't in the ignored set. */
+            failed = (0 == (cfg->ignored_exits[status->exit_status / 64]
+                    & (1LLU << (status->exit_status % 64))));
         } else if (WIFSIGNALED(stat_loc)) {
             status->reason = REASON_TERM;
             status->term_signal = WTERMSIG(stat_loc);
@@ -600,6 +635,7 @@ int main(int argc, char **argv) {
         .timeout_sec = NO_TIMEOUT,
         .timeout_kill_signal = SIGTERM,
     };
+    config.ignored_exits[0] |= 1; /* exit of 0 is always ignored */
     handle_args(&config, argc, argv);
     cfg = &config;              /* After this point, cfg is const */
 

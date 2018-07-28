@@ -42,6 +42,7 @@ struct config {
     char *error_handler;
     char *run_id_str;
     int timeout_kill_signal;
+    uint64_t ignored_exits[256/64];
 
     int argc;
     char **argv;

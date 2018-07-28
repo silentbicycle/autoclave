@@ -75,9 +75,10 @@
 <h2 id="SYNOPSIS">SYNOPSIS</h2>
 
 <p>autoclave [-h] [-c <var>count</var>] [-l] [-e] [-f <var>max_failures</var>]
-          [-i <var>id_str</var>] [-k <var>signal</var>] [-m <var>min_duration_msec</var>]
-          [-o <var>output_prefix</var>] [-r <var>max_runs</var>] [-s]
-          [-t <var>timeout_sec</var>] [-v] [-x <var>cmd</var>] <var>command line</var></p>
+          [-i <var>id_str</var>] [-I <var>exits</var>] [-k <var>signal</var>]
+          [-m <var>min_duration_msec</var>] [-o <var>output_prefix</var>]
+          [-r <var>max_runs</var>] [-s] [-t <var>timeout_sec</var>] [-v]
+          [-x <var>cmd</var>] <var>command line</var></p>
 
 <h2 id="DESCRIPTION">DESCRIPTION</h2>
 
@@ -109,6 +110,7 @@ Note: when both stdout and stderr are logged, there will be
 twice as many logs.</p></dd>
 <dt class="flush"><code>-k INT</code></dt><dd><p>Send the supervised program signal INT on timeout.
 Defaults to SIGTERM.</p></dd>
+<dt class="flush"><code>-I INTS</code></dt><dd><p>A comma-separated list of non-zero exit statuses to ignore.</p></dd>
 <dt class="flush"><code>-l</code></dt><dd><p>Log stdout. Defaults to false.</p></dd>
 <dt class="flush"><code>-e</code></dt><dd><p>Log stderr. Defaults to false.</p></dd>
 <dt><code>-f FAILURES</code></dt><dd><p>If the supervised program has failed FAILURES times, exit
@@ -211,6 +213,11 @@ autoclave will run until terminated.</p>
 <pre><code>$ autoclave -v buggy_program
 </code></pre>
 
+<p>Do not treat exit statuses of 1 or 2 as failures:</p>
+
+<pre><code>$ autoclave -v -I 1,2 buggy_program
+</code></pre>
+
 <p>If it succeeds 10 times, exit with EXIT_SUCCESS:</p>
 
 <pre><code>$ autoclave -v -r 10 buggy_program
@@ -307,7 +314,7 @@ default, but there isn't a way to configure it yet.</p>
 
 <h2 id="COPYRIGHT">COPYRIGHT</h2>
 
-<p><code>autoclave</code> is Copyright (C) 2015-18 Scott Vokes <a href="&#x6d;&#97;&#x69;&#108;&#x74;&#x6f;&#58;&#118;&#x6f;&#x6b;&#x65;&#x73;&#46;&#115;&#x40;&#x67;&#x6d;&#x61;&#105;&#x6c;&#x2e;&#x63;&#x6f;&#109;" data-bare-link="true">&#x76;&#x6f;&#x6b;&#x65;&#x73;&#x2e;&#115;&#64;&#x67;&#x6d;&#x61;&#x69;&#x6c;&#x2e;&#x63;&#111;&#109;</a>.</p>
+<p><code>autoclave</code> is Copyright (C) 2015-18 Scott Vokes <a href="&#x6d;&#x61;&#x69;&#x6c;&#116;&#111;&#58;&#x76;&#111;&#x6b;&#x65;&#x73;&#x2e;&#x73;&#x40;&#103;&#109;&#97;&#105;&#108;&#x2e;&#x63;&#111;&#x6d;" data-bare-link="true">&#118;&#111;&#x6b;&#x65;&#115;&#x2e;&#x73;&#x40;&#103;&#109;&#x61;&#x69;&#x6c;&#x2e;&#99;&#x6f;&#109;</a>.</p>
 
 <h2 id="SEE-ALSO">SEE ALSO</h2>
 

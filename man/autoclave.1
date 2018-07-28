@@ -4,7 +4,7 @@
 .TH "AUTOCLAVE" "1" "July 2018" "" ""
 .
 .SH "SYNOPSIS"
-autoclave [\-h] [\-c \fIcount\fR] [\-l] [\-e] [\-f \fImax_failures\fR] [\-i \fIid_str\fR] [\-k \fIsignal\fR] [\-m \fImin_duration_msec\fR] [\-o \fIoutput_prefix\fR] [\-r \fImax_runs\fR] [\-s] [\-t \fItimeout_sec\fR] [\-v] [\-x \fIcmd\fR] \fIcommand line\fR
+autoclave [\-h] [\-c \fIcount\fR] [\-l] [\-e] [\-f \fImax_failures\fR] [\-i \fIid_str\fR] [\-I \fIexits\fR] [\-k \fIsignal\fR] [\-m \fImin_duration_msec\fR] [\-o \fIoutput_prefix\fR] [\-r \fImax_runs\fR] [\-s] [\-t \fItimeout_sec\fR] [\-v] [\-x \fIcmd\fR] \fIcommand line\fR
 .
 .SH "DESCRIPTION"
 autoclave repeatedly executes a command line until its process exits with a non\-zero status, is stopped/terminated by a signal, a user\-specified timeout (\-t) occurs, or a user\-specified number of runs (\-r) have passed without failures\.
@@ -31,6 +31,10 @@ If using logging, only keep logs for the COUNT most recent passing runs\. By def
 .TP
 \fB\-k INT\fR
 Send the supervised program signal INT on timeout\. Defaults to SIGTERM\.
+.
+.TP
+\fB\-I INTS\fR
+A comma\-separated list of non\-zero exit statuses to ignore\.
 .
 .TP
 \fB\-l\fR
@@ -177,6 +181,19 @@ Print run and failure counts and timing info:
 .nf
 
 $ autoclave \-v buggy_program
+.
+.fi
+.
+.IP "" 0
+.
+.P
+Do not treat exit statuses of 1 or 2 as failures:
+.
+.IP "" 4
+.
+.nf
+
+$ autoclave \-v \-I 1,2 buggy_program
 .
 .fi
 .

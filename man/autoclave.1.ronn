@@ -4,9 +4,10 @@ autoclave: a pressure cooker for programs
 ## SYNOPSIS
 
 autoclave [-h] [-c <count>] [-l] [-e] [-f <max_failures>]
-          [-i <id_str>] [-k <signal>] [-m <min_duration_msec>]
-          [-o <output_prefix>] [-r <max_runs>] [-s]
-          [-t <timeout_sec>] [-v] [-x <cmd>] <command line>
+          [-i <id_str>] [-I <exits>] [-k <signal>]
+          [-m <min_duration_msec>] [-o <output_prefix>]
+          [-r <max_runs>] [-s] [-t <timeout_sec>] [-v]
+          [-x <cmd>] <command line>
 
 
 ## DESCRIPTION
@@ -44,6 +45,10 @@ information, or send a notification.
   * `-k INT`:
     Send the supervised program signal INT on timeout.
     Defaults to SIGTERM.
+
+  * `-I INTS`:
+    A comma-separated list of non-zero exit statuses to ignore, rather
+    than considering them as failures.
 
   * `-l`:
     Log stdout. Defaults to false.
@@ -182,6 +187,10 @@ Repeatedly run buggy_program until it fails:
 Print run and failure counts and timing info:
 
     $ autoclave -v buggy_program
+
+Do not treat exit statuses of 1 or 2 as failures:
+
+    $ autoclave -v -I 1,2 buggy_program
 
 If it succeeds 10 times, exit with EXIT_SUCCESS:
 

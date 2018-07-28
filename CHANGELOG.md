@@ -19,6 +19,8 @@ Added `-k <int>` to send a custom signal on timeout, rather than
 
 `run_id` now starts counting at 1 rather than 0.
 
+Added `-I <ints>` to ignore specific non-zero exit statuses.
+
 
 ### Bug Fixes
 
