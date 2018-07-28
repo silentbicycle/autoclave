@@ -121,7 +121,8 @@ would instead save it to `tmp/output.true.pass.15.stderr.log`.
 
 If the prefix includes a subdirectory name, autoclave will attempt to
 create it. Creating multiple nested directories, such as
-`tmp/log/output`, is not supported.
+`tmp/log/output`, is not supported, though it will work if `tmp/` is
+already present.
 
 
 ## ENVIRONMENT
