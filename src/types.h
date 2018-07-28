@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <sys/time.h>
+#include <signal.h>
+#include <sys/types.h>
 
 enum rot_t {
     ROT_NONE,
@@ -23,6 +25,7 @@ struct rotation {
 /* Defaults */
 #define DEF_MAX_FAILURES 1
 #define DEF_MIN_DURATION_MSEC 50
+#define DEF_KILL_SIGNAL SIGINT
 #define NO_TIMEOUT (-1)
 #define NO_LIMIT ((size_t)(-1))
 
@@ -38,6 +41,7 @@ struct config {
     int verbosity;
     char *error_handler;
     char *run_id_str;
+    int timeout_kill_signal;
 
     int argc;
     char **argv;

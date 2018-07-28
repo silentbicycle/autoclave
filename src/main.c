@@ -17,7 +17,6 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdio.h>
-#include <signal.h>
 #include <assert.h>
 #include <err.h>
 #include <errno.h>
@@ -27,9 +26,9 @@
 #include <poll.h>
 #include <time.h>
 #include <sys/stat.h>
-#include <sys/types.h>
 #include <sys/wait.h>
 #include <libgen.h>
+#include <ctype.h>
 
 /* Version 0.1.1 */
 #define AUTOCLAVE_VERSION_MAJOR 0
@@ -59,7 +58,7 @@ static void usage(const char *msg) {
         AUTOCLAVE_VERSION_PATCH, AUTOCLAVE_AUTHOR);
     fprintf(stderr,
         "Usage: autoclave [-h] [-c <count>] [-l] [-e] [-f <max_failures>]\n"
-        "                 [-i <id_str>] [-m <min_duration_msec>]\n"
+        "                 [-i <id_str>] [-k <signal>] [-m <min_duration_msec>]\n"
         "                 [-o <output_prefix>] [-r <max_runs>] [-s]\n"
         "                 [-t <timeout_sec>] [-v] [-x <cmd>] <command line>\n"
         "\n"
@@ -67,6 +66,7 @@ static void usage(const char *msg) {
         "    -c COUNT:   rotate log files by count\n"
         "    -f COUNT:   max failures (def. 1)\n"
         "    -i STR:     replace STR in args with run_id\n"
+        "    -k INT:     signal to send process on timeout\n"
         "    -l:         log stdout\n"
         "    -e:         log stderr\n"
         "    -m MSEC:    min duration per run, will delay to pad (def. 50 msec)\n"
@@ -81,25 +81,42 @@ static void usage(const char *msg) {
     exit(1);
 }
 
+static int signal_id_from_str(const char *name) {
+    if (isdigit(name[0])) {
+        int res = strtoll(optarg, NULL, 10);
+        if (res <= 0 || res > SIGRTMAX) { return -1; }
+        return res;
+    }
+    /* Name-based lookup is not currently supported. */
+    return -1;
+}
+
 static void handle_args(struct config *cfg, int argc, char **argv) {
     int fl = 0;
-    while ((fl = getopt(argc, argv, "hc:ef:i:lm:o:r:st:vx:")) != -1) {
+    while ((fl = getopt(argc, argv, "hc:ef:i:k:lm:o:r:st:vx:")) != -1) {
         switch (fl) {
         case 'h':               /* help */
             usage(NULL);
             break;
         case 'c':               /* rotation count */
             cfg->rot.type = ROT_COUNT;
-            cfg->rot.u.count.count = (size_t)atoll(optarg);
+            cfg->rot.u.count.count = (size_t)strtoll(optarg, NULL, 10);
             break;
         case 'e':               /* log stderr */
             cfg->log_stderr = true;
             break;
         case 'f':               /* max failures */
-            cfg->max_failures = (size_t)atoll(optarg);
+            cfg->max_failures = (size_t)strtoll(optarg, NULL, 10);
             break;
         case 'i':               /* run_id string */
             cfg->run_id_str = optarg;
+            break;
+        case 'k':               /* timeout kill signal */
+            cfg->timeout_kill_signal = signal_id_from_str(optarg);
+            if (cfg->timeout_kill_signal == -1) {
+                fprintf(stderr, "Invalid signal: %s\n", optarg);
+                usage(NULL);
+            }
             break;
         case 'l':               /* log stdout */
             cfg->log_stdout = true;
@@ -111,7 +128,7 @@ static void handle_args(struct config *cfg, int argc, char **argv) {
             cfg->output_prefix = optarg;
             break;
         case 'r':               /* max runs */
-            cfg->max_runs = (size_t)atoll(optarg);
+            cfg->max_runs = (size_t)strtoll(optarg, NULL, 10);
             break;
         case 's':               /* supervise: abbreviation for -l -e -v */
             cfg->log_stdout = true;
@@ -323,7 +340,7 @@ static bool try_exec(size_t id, struct child_status *status) {
                 outlog != -1 ? outlogbuf : NULL,
                 errlog != -1 ? errlogbuf : NULL);
         } else if (status->reason == REASON_TIMEOUT) {
-            int res = kill(kid, SIGINT);
+            int res = kill(kid, cfg->timeout_kill_signal);
             if (res == -1) {
                 if (errno == ESRCH) {
                     /* Race: child terminated on its own, as we
@@ -581,6 +598,7 @@ int main(int argc, char **argv) {
         .max_runs = NO_LIMIT,
         .min_duration_msec = DEF_MIN_DURATION_MSEC,
         .timeout_sec = NO_TIMEOUT,
+        .timeout_kill_signal = SIGTERM,
     };
     handle_args(&config, argc, argv);
     cfg = &config;              /* After this point, cfg is const */
