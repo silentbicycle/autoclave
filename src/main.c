@@ -26,8 +26,10 @@
 #include <limits.h>
 #include <poll.h>
 #include <time.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <libgen.h>
 
 /* Version 0.1.1 */
 #define AUTOCLAVE_VERSION_MAJOR 0
@@ -42,6 +44,9 @@ static const char REASON_TIMEOUT[] = "timeout";
 static const char REASON_EXIT[] = "exit";
 static const char REASON_TERM[] = "term";
 static const char REASON_STOP[] = "stop";
+
+static long arg_max_size;
+static char *output_prefix_buf;
 
 static const struct config * cfg;
 
@@ -134,8 +139,35 @@ static void handle_args(struct config *cfg, int argc, char **argv) {
     cfg->argv = argv + 1;
 
     if (cfg->argc < 1) { usage(NULL); }
-    if (cfg->output_prefix == NULL) {
-        cfg->output_prefix = cfg->argv[0];
+
+    if (cfg->log_stdout || cfg->log_stderr) {
+        if (cfg->output_prefix == NULL) {
+            /* Construct a default prefix for the logs. */
+            char argv_cp[arg_max_size + 1];
+            memset(argv_cp, 0x00, arg_max_size + 1);
+            strncpy(argv_cp, cfg->argv[0], arg_max_size);
+
+            output_prefix_buf = calloc(1, arg_max_size);
+            if (output_prefix_buf == NULL) { err(1, "calloc"); }
+            (void)snprintf(output_prefix_buf, arg_max_size,
+                "autoclave_%s", basename(argv_cp));
+            cfg->output_prefix = output_prefix_buf;
+        } else {
+            /* If output prefix contain a sub-directories, then attempt
+             * to create it, if not already present. */
+            char prefix_cp[arg_max_size + 1];
+            memset(prefix_cp, 0x00, arg_max_size + 1);
+
+            strncpy(prefix_cp, cfg->output_prefix, arg_max_size);
+            char *dir = dirname(prefix_cp);
+            if (-1 == mkdir(dir, 0700)) {
+                if (errno == EEXIST) {
+                    errno = 0;      /* already exists, ignore */
+                } else {
+                    err(1, "mkdir: %s", dir);
+                }
+            }
+        }
     }
 }    
 
@@ -169,6 +201,7 @@ static void sigchild_handler(int sig) {
 static void sigint_handler(int sig) {
     assert(sig == SIGINT);
     print_stats();
+    free(output_prefix_buf);
     exit(state.failures > 0 ? EXIT_FAILURE : EXIT_SUCCESS);
 }
 
@@ -182,10 +215,10 @@ static int log_path(char *buf, size_t buf_size,
         status_suffix = "";
         break;
     case LOG_PASS:
-        status_suffix = "_pass";
+        status_suffix = ".pass";
         break;
     case LOG_FAIL:
-        status_suffix = "_FAIL";
+        status_suffix = ".FAIL";
         break;
     default:
         fprintf(stderr, "(MATCH FAIL)\n");
@@ -540,6 +573,8 @@ static void print_stats(void) {
 int main(int argc, char **argv) {
     (void)argc;
     (void)argv;
+
+    arg_max_size = sysconf(_SC_ARG_MAX);
 
     struct config config = {
         .max_failures = 1,
