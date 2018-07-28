@@ -167,7 +167,7 @@ static void handle_args(struct config *cfg, int argc, char **argv) {
             output_prefix_buf = calloc(1, arg_max_size);
             if (output_prefix_buf == NULL) { err(1, "calloc"); }
             (void)snprintf(output_prefix_buf, arg_max_size,
-                "autoclave_%s", basename(argv_cp));
+                "autoclave.%s", basename(argv_cp));
             cfg->output_prefix = output_prefix_buf;
         } else {
             /* If output prefix contain a sub-directories, then attempt
@@ -523,12 +523,12 @@ static int mainloop(void) {
     while (state.run_id < cfg->max_runs) {
         struct timeval pre, post;
         struct child_status s;
+        state.run_id++;
         cur_time(&pre);
         bool failed = try_exec(state.run_id, &s);
         cur_time(&post);
         if (failed) { state.failures++; }
         if (state.failures >= cfg->max_failures) { break; }
-        state.run_id++;
 
         const double duration_msec = calc_duration(&pre, &post);
 
