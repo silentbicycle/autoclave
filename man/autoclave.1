@@ -1,19 +1,22 @@
 .\" generated with Ronn/v0.7.3
 .\" http://github.com/rtomayko/ronn/tree/0.7.3
 .
-.TH "AUTOCLAVE" "1" "March 2015" "" ""
+.TH "AUTOCLAVE" "1" "July 2018" "" ""
 .
 .SH "SYNOPSIS"
-autoclave [\-h] [\-c COUNT] [\-l] [\-e] [\-f MAX_FAILURES] [\-o OUT_PATH] [\-r MAX_RUNS] [\-s] [\-t TIMEOUT] [\-v] [\-w WAIT] [\-x CMD] \fIcommand line\fR
+autoclave [\-h] [\-c \fIcount\fR] [\-l] [\-e] [\-f \fImax_failures\fR] [\-i \fIid_str\fR] [\-I \fIexits\fR] [\-k \fIsignal\fR] [\-m \fImin_duration_msec\fR] [\-o \fIoutput_prefix\fR] [\-r \fImax_runs\fR] [\-s] [\-t \fItimeout_sec\fR] [\-v] [\-x \fIcmd\fR] \fIcommand line\fR
 .
 .SH "DESCRIPTION"
-autoclave repeatedly executes a command line until its process exits with a non\-zero status, is stopped/terminated by a signal, a user\-specified timeout (\-t) occurs, or a user\-specified number of runs (\-r) have passed without any failures\.
+autoclave repeatedly executes a command line until its process exits with a non\-zero status, is stopped/terminated by a signal, a user\-specified timeout (\-t) occurs, or a user\-specified number of runs (\-r) have passed without failures\.
 .
 .P
-It can log the contents of stdout (\-l) and/or stderr (\-e), and can rotate the log files so a fixed number of logs are kept (\-c)\. If running in verbose (\-v) mode, a timestamp and run/failure counts will be printed\. (Supervise (\-s) is an abbreviation for \fB\-l \-e \-v\fR\.)
+It can log the contents of stdout (\-l) and/or stderr (\-e), and can rotate the log files so a fixed number of logs are kept (\-c)\. For more information about logging, see LOGGING below\.
 .
 .P
-On failure, a handler program (\-x) can be called with informaiton about the child process\. That way, a debugger can be opened if the stressed program times out or dumps core\. This program must be in the path\.
+If running in verbose (\-v) mode, a timestamp, duration, and run/failure counts will be printed after each run\. Overall stats will be printed on exit\.
+.
+.P
+On failure / timeout, autoclave can run a handler program (\-x) with information about the child process in environment variables\. This could be used to attach a debugger to the supervised program, gather extra information, or send a notification\.
 .
 .SH "OPTIONS"
 .
@@ -23,11 +26,19 @@ Print a usage summary and exit\.
 .
 .TP
 \fB\-c COUNT\fR
-If logging is used, only keep logs for the COUNT most recent runs\. (If both stdout and stderr are logged, there will be 2 * COUNT logs\.) By default, log rotation is off\.
+If using logging, only keep logs for the COUNT most recent passing runs\. By default, log rotation is disabled\. Note: when both stdout and stderr are logged, there will be twice as many logs\.
+.
+.TP
+\fB\-k INT\fR
+Send the supervised program signal INT on timeout\. Defaults to SIGTERM\.
+.
+.TP
+\fB\-I INTS\fR
+A comma\-separated list of non\-zero exit statuses to ignore, rather than considering them as failures\.
 .
 .TP
 \fB\-l\fR
-Log stdout\. Defaults to false\. Log output paths default to \fBPROG_PATH/PROG_NAME\.RUN_ID\.stdout\.log\fR\.
+Log stdout\. Defaults to false\.
 .
 .TP
 \fB\-e\fR
@@ -35,40 +46,74 @@ Log stderr\. Defaults to false\.
 .
 .TP
 \fB\-f FAILURES\fR
-Run for multiple failures, rather than exiting after the first\.
+If the supervised program has failed FAILURES times, exit with \fBEXIT_FAILURE\fR\. Defaults to 1\.
 .
 .TP
-\fB\-o\fR
-Set the output path and base name for logs\. Defaults to the first part of the command line given to autoclave\.
+\fB\-i STRING\fR
+Anywhere STRING appears as a complete string in the command line, replace it with the current run ID\.
 .
 .TP
-\fB\-r MAX_RUNS\fR:
+\fB\-m MILLISECONDS\fR
+Ensure that at least MILLISECONDS have passed between runs\. If the run terminates before this time is up, autoclave will sleep for the remaining time, to prevent very short\-lived programs from unexpectedly spinning in a tight loop\. Defaults to 50 msec\.
 .
-.IP
+.TP
+\fB\-o STRING\fR
+Set the output prefix for log files\. For more information about logging paths, see LOGGING below\.
+.
+.TP
+\fB\-r MAX_RUNS\fR
 If MAX_RUNS executions of the command line complete without any failures, then terminate autoclave with a return value of \fBEXIT_SUCCESS\fR\.
 .
 .TP
 \fB\-s\fR
-Supervise \- An abbreviation for \fB\-l \-e \-v\fR, which are often used together\.
+Supervise \- An abbreviation for \fB\-l \-e \-v\fR\.
 .
 .TP
-\fB\-t TIMEOUT\fR
-If any individual execution of the command line takes longer than TIMEOUT seconds to complete (perhaps due to a deadlock), consider it a failure\. If an error handler is provided, call it, otherwise kill(2) the child process ID\.
+\fB\-t SECONDS\fR
+If any individual run of the program takes longer than SECONDS to complete (perhaps due to a deadlock), consider it a failure\. If an error handler is provided with \fB\-x\fR, call it, otherwise kill(2) the child process ID\.
 .
 .TP
 \fB\-v\fR
 Increase verbosity\.
 .
 .TP
-\fB\-w SECONDS\fR
-Wait SECONDS between executing the command line each time\. Defaults to 1\.
-.
-.TP
 \fB\-x CMD\fR
-If a failure occurs, run CMD\. See ENVIRONMENT\.
+If a failure occurs, run a failure handler CMD (using \fBsystem(3)\fR)\. For details about failure handler usage, see ENVIRONMENT\.
+.
+.SH "LOGGING"
+autoclave can log the stdout and/or stderr of each run to a file, and can rotate logs so only logs from the last N passing runs are kept\.
+.
+.P
+By default, the log files are saved as \fBautoclave\.$NAME\.$STATUS\.$RUN_ID\.$STREAM\.log\fR, where \fB$NAME\fR is the \fBbasename\fR for the supervised process\'s \fBARGV[0]\fR (typically, the program name), \fB$STATUS\fR is "pass" or "FAIL", \fB$RUN_ID\fR is the ID for the current run (counting up from 1), and \fB$STREAM\fR is either "stdout" or "stderr"\.
+.
+.P
+For example, the stderr output from the 15th run of \fB/bin/true\fR, if passing, would be stored in \fBautoclave\.true\.pass\.15\.stderr\.log\fR\.
+.
+.P
+The \fB\-o\fR (output prefix) option can be used to change the portion before \fB$STATUS\fR\. For example, running:
+.
+.IP "" 4
+.
+.nf
+
+$ autoclave \-o tmp/output \-l \-e /bin/true
+.
+.fi
+.
+.IP "" 0
+.
+.P
+would instead save it to \fBtmp/output\.true\.pass\.15\.stderr\.log\fR\.
+.
+.P
+If the prefix includes a subdirectory name, autoclave will attempt to create it\. Creating multiple nested directories, such as \fBtmp/log/output\fR, is not supported\.
 .
 .SH "ENVIRONMENT"
 The failure handler will be called with the following environment variables defined:
+.
+.TP
+\fBAUTOCLAVE_CMD\fR
+The command used to start the supervised process\. (Its \fBARGV[0]\fR\.)
 .
 .TP
 \fBAUTOCLAVE_CHILD_PID\fR
@@ -84,33 +129,39 @@ The general failure cause: "timeout", "exit", "term", "stop"\.
 .
 .TP
 \fBAUTOCLAVE_DUMPED_CORE\fR
-Whether the child process dumped core\. "1" or "0"\.
+Whether the child process dumped core, 1 or 0\. On systems where \fBWCOREDUMP\fR is unsupported, this is always 0\.
 .
 .TP
 \fBAUTOCLAVE_EXIT_STATUS\fR
-The exit status of the child process, if it exited\.
+The exit status of the child process, if it exited, otherwise 0\.
 .
 .TP
 \fBAUTOCLAVE_TERM_SIGNAL\fR
-The signal that terminated the child process, if any\.
+The signal that terminated the child process, if it was terminated by a signal, otherwise 0\.
 .
 .TP
 \fBAUTOCLAVE_STOP_SIGNAL\fR
-The signal that caused the child process to stop, if any\.
+The signal that caused the child process to stop, if any, otherwise 0\.
 .
 .TP
 \fBAUTOCLAVE_STDOUT_LOG\fR
-The current stdout log file, if any\.
+The current stdout log file, if any\. Note that after the process completes, this log and the stderr logs will be renamed to include "pass" or "FAIL"\.
 .
 .TP
 \fBAUTOCLAVE_STDERR_LOG\fR
 The current stderr log file, if any\.
 .
+.P
+Note that in order for the failure handler to attach gdb to a process, autoclave may need to be run with privilege escalation such as sudo or doas\.
+.
+.P
+autoclave does not attempt to halt the process after the failure handler has exited\.
+.
 .SH "EXIT STATUS"
-Returns 0 if the maximum number of runs (\-r) executed without any failures, or 1 otherwise\.
+Returns 0 if the maximum number of runs (\fB\-r\fR) executed without any failures, or 1 otherwise\. If there is no maximum number of runs set, autoclave will run until terminated\.
 .
 .SH "EXAMPLES"
-Repeatedly run buggy_program until it crashes:
+Repeatedly run buggy_program until it fails:
 .
 .IP "" 4
 .
@@ -123,7 +174,7 @@ $ autoclave buggy_program
 .IP "" 0
 .
 .P
-Same, but print run and failure counts:
+Print run and failure counts and timing info:
 .
 .IP "" 4
 .
@@ -136,7 +187,20 @@ $ autoclave \-v buggy_program
 .IP "" 0
 .
 .P
-Same, but if it succeeds 10 times, return EXIT_SUCCESS:
+Do not treat exit statuses of 1 or 2 as failures:
+.
+.IP "" 4
+.
+.nf
+
+$ autoclave \-v \-I 1,2 buggy_program
+.
+.fi
+.
+.IP "" 0
+.
+.P
+If it succeeds 10 times, exit with EXIT_SUCCESS:
 .
 .IP "" 4
 .
@@ -149,7 +213,33 @@ $ autoclave \-v \-r 10 buggy_program
 .IP "" 0
 .
 .P
-Repeatedly run buggy_program, logging stdout to \fBbuggy_program\.1\.stdout\.log\fR, \fBbuggy_program\.2\.stdout\.log\fR, and so on:
+Ensure there is at least 500 mesc between runs, sleeping if necessary:
+.
+.IP "" 4
+.
+.nf
+
+$ autoclave \-v \-r 10 \-m 500 buggy_program
+.
+.fi
+.
+.IP "" 0
+.
+.P
+Run without any delay:
+.
+.IP "" 4
+.
+.nf
+
+$ autoclave \-v \-r 10 \-m 0 buggy_program
+.
+.fi
+.
+.IP "" 0
+.
+.P
+Repeatedly run buggy_program, logging stdout to \fBautoclave\.buggy_program\.pass\.1\.stdout\.log\fR, \fBautoclave\.buggy_program\.FAIL\.2\.stdout\.log\fR, and so on:
 .
 .IP "" 4
 .
@@ -162,7 +252,7 @@ $ autoclave \-l buggy_program
 .IP "" 0
 .
 .P
-Same, but log to \fB/tmp/buggy\.ID\.stdout\.log\fR instead:
+Log to \fB/tmp/buggy\.STATUS\.ID\.stdout\.log\fR instead:
 .
 .IP "" 4
 .
@@ -175,7 +265,7 @@ $ autoclave \-l \-o /tmp/buggy buggy_program
 .IP "" 0
 .
 .P
-Log, but only keep the 5 most recent log files:
+Log, but only keep logs from the 5 most recent passing runs:
 .
 .IP "" 4
 .
@@ -188,13 +278,52 @@ $ autoclave \-l \-c 5 buggy_program
 .IP "" 0
 .
 .P
-Same, but log stderr as well as stdout (keeping 10 files):
+Log stderr as well as stdout (keeping 10 files):
 .
 .IP "" 4
 .
 .nf
 
 $ autoclave \-l \-e \-c 5 buggy_program
+.
+.fi
+.
+.IP "" 0
+.
+.P
+Repeatedly run buggy_program, printing run and failure counts and timing info, and logging stdout and stderr:
+.
+.IP "" 4
+.
+.nf
+
+$ autoclave \-l \-e \-v buggy_program
+.
+.fi
+.
+.IP "" 0
+.
+.P
+Alias for the previous use:
+.
+.IP "" 4
+.
+.nf
+
+$ autoclave \-s buggy_program
+.
+.fi
+.
+.IP "" 0
+.
+.P
+Repeatedly run buggy_program with the run ID as its ARGV[2]:
+.
+.IP "" 4
+.
+.nf
+
+$ autoclave \-i % buggy_program \-\-seed %
 .
 .fi
 .
@@ -220,49 +349,62 @@ Run a program that occasionally deadlocks, halting it and counting it as a failu
 .
 .nf
 
-$ autoclave \-t 10  examples/deadlock_example
+$ autoclave \-t 10 build/deadlock_example
 .
 .fi
 .
 .IP "" 0
 .
 .P
-Same, but run the script \fBexamples/gdb_it\fR when it times out, so gdb can attach to the stopped process and investigate what is deadlocking\. (Note: the process is not halted after the \-x command returns\.)
+Attach gdb to the child process when the process times out, to investigate what is deadlocking:
 .
 .IP "" 4
 .
 .nf
 
-$ autoclave \-t 10 \-x examples/gdb_it examples/deadlock_example
+$ autoclave \-t 10 \-x \'sudo gdb \-\-pid=$AUTOCLAVE_CHILD_PID\' build/deadlock_example
 .
 .fi
 .
 .IP "" 0
 .
 .P
-Run \fBexamples/crash_example\fR, calling \fBexamples/gdb_it\fR if it fails:
+Use a failure handler script, \fBexamples/gdb_it\fR, rather than running gdb directly:
 .
 .IP "" 4
 .
 .nf
 
-$ autoclave \-x examples/gdb_it examples/crash_example
+$ autoclave \-t 10 \-x examples/gdb_it build/deadlock_example
+.
+.fi
+.
+.IP "" 0
+.
+.P
+Run \fBbuild/crash_example\fR, calling \fBexamples/gdb_it\fR if it fails\. This will load a core dump, if available:
+.
+.IP "" 4
+.
+.nf
+
+$ autoclave \-x examples/gdb_it build/crash_example
 .
 .fi
 .
 .IP "" 0
 .
 .SH "BUGS"
-All monitoring is based on the child process directly created by forking and execve\-ing the command, so if the command is just a wrapper script for another program, the results will be incomplete\.
+All monitoring is based on the child process directly created by forking and execve\-ing the command, so if the command is just a wrapper script for another program (and it forgets to use \fBexec\fR), the results may be incomplete\.
 .
 .P
 There may be race conditions in the child process error handling logic\.
 .
 .P
-If \-f is used to track multiple failures in combination with \-c, log rotation may delete older logs with information about failures\.
+Log rotation does not delete failure logs\. This is probably the right default, but there isn\'t a way to configure it yet\.
 .
 .SH "COPYRIGHT"
-\fBautoclave\fR is Copyright (C) 2015 Scott Vokes \fIvokes\.s@gmail\.com\fR\.
+\fBautoclave\fR is Copyright (C) 2015\-18 Scott Vokes \fIvokes\.s@gmail\.com\fR\.
 .
 .SH "SEE ALSO"
-gdb(1), core(5)
+gdb(1), core(5), radamsa(1) \fIhttps://gitlab\.com/akihe/radamsa\fR

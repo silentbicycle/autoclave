@@ -27,9 +27,11 @@ static void *mainloop(void *arg) {
 }
 
 int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
     struct timeval tv;
     gettimeofday(&tv, NULL);
-    srand(tv.tv_usec);
+    srand((unsigned)tv.tv_usec);
     deadlock_flag = 9 == (rand() % 10);
 
     pthread_t threads[2];
@@ -47,6 +49,7 @@ int main(int argc, char **argv) {
         void *value = NULL;
         res = pthread_join(threads[i], &value);
         (void)value;
+        (void)res;
     }
 
     return 0;

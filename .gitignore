@@ -1,5 +1,2 @@
-autoclave
-*.o
 *.log
-examples/*_example
-
+build/

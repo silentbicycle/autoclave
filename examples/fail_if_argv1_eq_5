@@ -1,0 +1,7 @@
+#!/bin/sh
+echo "args: $*"
+
+if [ "$1" = 5 ]; then
+    echo "First arg is 5, exiting."
+    exit 1
+fi
