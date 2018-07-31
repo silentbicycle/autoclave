@@ -1,6 +1,6 @@
 # autoclave Changes By Release
 
-## v0.2.0 - 2018-xx-xx
+## v0.2.0 - 2018-07-31
 
 ### API Changes
 

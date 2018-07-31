@@ -1,5 +1,5 @@
 /* 
- * Copyright (c) 2015 Scott Vokes <vokes.s@gmail.com>
+ * Copyright (c) 2015-18 Scott Vokes <vokes.s@gmail.com>
  *  
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -31,10 +31,10 @@
 #include <libgen.h>
 #include <ctype.h>
 
-/* Version 0.1.1 */
+/* Version 0.2.0 */
 #define AUTOCLAVE_VERSION_MAJOR 0
-#define AUTOCLAVE_VERSION_MINOR 1
-#define AUTOCLAVE_VERSION_PATCH 1
+#define AUTOCLAVE_VERSION_MINOR 2
+#define AUTOCLAVE_VERSION_PATCH 0
 #define AUTOCLAVE_AUTHOR "Scott Vokes <vokes.s@gmail.com>"
 
 #include "types.h"
