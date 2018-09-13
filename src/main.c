@@ -98,7 +98,15 @@ static void usage(const char *msg) {
 static int signal_id_from_str(const char *name) {
     if (isdigit(name[0])) {
         int res = strtoll(optarg, NULL, 10);
-        if (res <= 0 || res > SIGRTMAX) { return -1; }
+#ifdef SIGRTMAX
+#define MAX_SIGNAL_ID SIGRTMAX
+#else
+/* Darwin doesn't define SIGRTMAX.
+ * kill will still reject an invalid signal ID with EINVAL, though
+ * reporting it upfront would be better. */
+#define MAX_SIGNAL_ID 32
+#endif
+        if (res <= 0 || res > MAX_SIGNAL_ID) { return -1; }
         return res;
     }
 
