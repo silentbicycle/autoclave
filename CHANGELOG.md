@@ -1,5 +1,19 @@
 # autoclave Changes By Release
 
+## v0.2.1 - 2018-xx-xx
+
+### Bug Fixes
+
+Apparently `SIGRTMAX` is not defined on newer versions of macOS,
+so wrap it in an `#ifdef` and provide an alternative if unavailable.
+This allows autoclave to build on macOS.
+
+
+### Other Improvements
+
+None.
+
+
 ## v0.2.0 - 2018-07-31
 
 ### API Changes
