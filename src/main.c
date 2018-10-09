@@ -31,10 +31,10 @@
 #include <libgen.h>
 #include <ctype.h>
 
-/* Version 0.2.0 */
+/* Version 0.2.1 */
 #define AUTOCLAVE_VERSION_MAJOR 0
 #define AUTOCLAVE_VERSION_MINOR 2
-#define AUTOCLAVE_VERSION_PATCH 0
+#define AUTOCLAVE_VERSION_PATCH 1
 #define AUTOCLAVE_AUTHOR "Scott Vokes <vokes.s@gmail.com>"
 
 #include "types.h"

@@ -1,6 +1,6 @@
 # autoclave Changes By Release
 
-## v0.2.1 - 2018-xx-xx
+## v0.2.1 - 2018-10-08
 
 ### Bug Fixes
 
